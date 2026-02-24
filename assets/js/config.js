@@ -85,6 +85,14 @@ export const VIP_VISIT_BASE_REWARD = 26;
 export const VIP_VISIT_REWARD_PER_STEP = 10;
 export const VIP_VISIT_FEVER_REWARD_BONUS = 12;
 export const VIP_VISIT_EGG_BONUS_THRESHOLD = 8;
+export const TRADER_COOLDOWN_MS = 65000;
+export const TRADER_DURATION_MS = 32000;
+export const TRADER_MIN_PAY_COINS = 22;
+export const TRADER_MAX_PAY_COINS = 78;
+export const TRADER_MIN_PAY_EGGS = 4;
+export const TRADER_MAX_PAY_EGGS = 12;
+export const TRADER_PREMIUM_MIN_COINS = 58;
+export const TRADER_PREMIUM_MAX_COINS = 96;
 export const PREMIUM_FEED_CRAFT_EGGS = 3;
 export const PREMIUM_FEED_FEED_BONUS = 8;
 export const PREMIUM_FEED_COIN_BONUS = 6;
@@ -242,6 +250,17 @@ export const DEFAULT_STATE = {
     lastVisitAt: 0,
     completed: 0,
     failed: 0
+  },
+  mobileTrader: {
+    active: false,
+    kind: '',
+    payAmount: 0,
+    receiveAmount: 0,
+    startedAt: 0,
+    durationMs: 0,
+    lastOfferAt: 0,
+    completed: 0,
+    expired: 0
   },
   dailyGift: {
     lastClaimDate: '',

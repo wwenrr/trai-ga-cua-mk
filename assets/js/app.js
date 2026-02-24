@@ -48,6 +48,14 @@ import {
   VIP_VISIT_REWARD_PER_STEP,
   VIP_VISIT_FEVER_REWARD_BONUS,
   VIP_VISIT_EGG_BONUS_THRESHOLD,
+  TRADER_COOLDOWN_MS,
+  TRADER_DURATION_MS,
+  TRADER_MIN_PAY_COINS,
+  TRADER_MAX_PAY_COINS,
+  TRADER_MIN_PAY_EGGS,
+  TRADER_MAX_PAY_EGGS,
+  TRADER_PREMIUM_MIN_COINS,
+  TRADER_PREMIUM_MAX_COINS,
   PREMIUM_FEED_CRAFT_EGGS,
   PREMIUM_FEED_FEED_BONUS,
   PREMIUM_FEED_COIN_BONUS,
@@ -402,6 +410,45 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeMobileTrader(rawTrader) {
+    if (!rawTrader || typeof rawTrader !== 'object') {
+      return {
+        active: false,
+        kind: '',
+        payAmount: 0,
+        receiveAmount: 0,
+        startedAt: 0,
+        durationMs: 0,
+        lastOfferAt: 0,
+        completed: 0,
+        expired: 0
+      };
+    }
+
+    const allowedKinds = new Set(['coins_for_eggs', 'eggs_for_coins', 'coins_for_premium']);
+    const kind = typeof rawTrader.kind === 'string' && allowedKinds.has(rawTrader.kind)
+      ? rawTrader.kind
+      : '';
+    const active = Boolean(rawTrader.active);
+    const payAmount = clamp(toSafeNumber(rawTrader.payAmount), 0, 99999);
+    const receiveAmount = clamp(toSafeNumber(rawTrader.receiveAmount), 0, 99999);
+    const startedAt = toSafeNumber(rawTrader.startedAt);
+    const durationMs = clamp(toSafeNumber(rawTrader.durationMs), 0, 86400000);
+    const hasValidActiveDeal = active && kind && payAmount > 0 && receiveAmount > 0 && startedAt > 0 && durationMs > 0;
+
+    return {
+      active: hasValidActiveDeal,
+      kind: hasValidActiveDeal ? kind : '',
+      payAmount: hasValidActiveDeal ? payAmount : 0,
+      receiveAmount: hasValidActiveDeal ? receiveAmount : 0,
+      startedAt: hasValidActiveDeal ? startedAt : 0,
+      durationMs: hasValidActiveDeal ? durationMs : 0,
+      lastOfferAt: toSafeNumber(rawTrader.lastOfferAt),
+      completed: toSafeNumber(rawTrader.completed),
+      expired: toSafeNumber(rawTrader.expired)
+    };
+  }
+
   function normalizeDailyGift(rawGift) {
     if (!rawGift || typeof rawGift !== 'object') {
       return {
@@ -544,6 +591,7 @@ import { getRefs } from './dom.js';
       weatherShield: normalizeWeatherShield(input.weatherShield),
       flashOrder: normalizeFlashOrder(input.flashOrder),
       vipVisit: normalizeVipVisit(input.vipVisit),
+      mobileTrader: normalizeMobileTrader(input.mobileTrader),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
       premiumFeed: normalizePremiumFeed(input.premiumFeed),
@@ -1578,6 +1626,231 @@ import { getRefs } from './dom.js';
     renderVipVisitPanel();
   }
 
+  function getMobileTraderCooldownRemainingMs() {
+    if (!state.mobileTrader || state.mobileTrader.lastOfferAt <= 0) {
+      return 0;
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - state.mobileTrader.lastOfferAt);
+    return Math.max(0, TRADER_COOLDOWN_MS - elapsedMs);
+  }
+
+  function canGenerateMobileTraderOffer() {
+    return !state.mobileTrader.active && getMobileTraderCooldownRemainingMs() <= 0;
+  }
+
+  function clearMobileTraderState() {
+    state.mobileTrader.active = false;
+    state.mobileTrader.kind = '';
+    state.mobileTrader.payAmount = 0;
+    state.mobileTrader.receiveAmount = 0;
+    state.mobileTrader.startedAt = 0;
+    state.mobileTrader.durationMs = 0;
+  }
+
+  function createMobileTraderOffer() {
+    const kindPool = ['coins_for_eggs', 'eggs_for_coins', 'coins_for_premium'];
+
+    if (state.eggStock < 8) {
+      kindPool.push('coins_for_eggs');
+    }
+    if (state.coins < 48) {
+      kindPool.push('eggs_for_coins', 'eggs_for_coins');
+    }
+    if (state.coins >= TRADER_PREMIUM_MIN_COINS) {
+      kindPool.push('coins_for_premium');
+    }
+
+    const kind = kindPool[Math.floor(Math.random() * kindPool.length)] || 'eggs_for_coins';
+
+    if (kind === 'coins_for_eggs') {
+      const payAmount = clamp(
+        TRADER_MIN_PAY_COINS + Math.floor(Math.random() * (TRADER_MAX_PAY_COINS - TRADER_MIN_PAY_COINS + 1)) + state.upgrades.eggLevel,
+        TRADER_MIN_PAY_COINS,
+        TRADER_MAX_PAY_COINS + 16
+      );
+      const streakBonus = Math.min(3, Math.floor(state.streak / 5));
+      const weatherBonus = state.weather === 'festival' ? 1 : 0;
+      const receiveAmount = Math.max(2, Math.floor(payAmount / 9) + streakBonus + weatherBonus);
+      return { kind, payAmount, receiveAmount };
+    }
+
+    if (kind === 'coins_for_premium') {
+      const payAmount = clamp(
+        TRADER_PREMIUM_MIN_COINS + Math.floor(Math.random() * (TRADER_PREMIUM_MAX_COINS - TRADER_PREMIUM_MIN_COINS + 1)) + state.upgrades.feedLevel,
+        TRADER_PREMIUM_MIN_COINS,
+        TRADER_PREMIUM_MAX_COINS + 16
+      );
+      const receiveAmount = state.streak >= 12 ? 2 : 1;
+      return { kind, payAmount, receiveAmount };
+    }
+
+    const payAmount = clamp(
+      TRADER_MIN_PAY_EGGS + Math.floor(Math.random() * (TRADER_MAX_PAY_EGGS - TRADER_MIN_PAY_EGGS + 1)),
+      TRADER_MIN_PAY_EGGS,
+      TRADER_MAX_PAY_EGGS
+    );
+    const feverBonus = isFeverRunning() ? 8 : 0;
+    const receiveAmount = payAmount * (getQuickSellUnitPrice() + 2) + Math.min(18, state.streak) + feverBonus;
+    return {
+      kind: 'eggs_for_coins',
+      payAmount,
+      receiveAmount
+    };
+  }
+
+  function getMobileTraderDealText(deal = state.mobileTrader) {
+    if (!deal || !deal.kind) {
+      return '';
+    }
+
+    if (deal.kind === 'coins_for_eggs') {
+      return `Đổi ${deal.payAmount} xu lấy ${deal.receiveAmount} trứng`;
+    }
+    if (deal.kind === 'eggs_for_coins') {
+      return `Đổi ${deal.payAmount} trứng lấy ${deal.receiveAmount} xu`;
+    }
+    if (deal.kind === 'coins_for_premium') {
+      return `Mua ${deal.receiveAmount} cám premium với ${deal.payAmount} xu`;
+    }
+    return '';
+  }
+
+  function canAcceptMobileTraderDeal() {
+    if (!state.mobileTrader.active) {
+      return false;
+    }
+
+    if (state.mobileTrader.kind === 'eggs_for_coins') {
+      return state.eggStock >= state.mobileTrader.payAmount;
+    }
+    return state.coins >= state.mobileTrader.payAmount;
+  }
+
+  function getMobileTraderProgress() {
+    if (!state.mobileTrader.active) {
+      const cooldownRemainingMs = getMobileTraderCooldownRemainingMs();
+      const cooldownProgress = TRADER_COOLDOWN_MS > 0
+        ? clamp(Math.round(((TRADER_COOLDOWN_MS - cooldownRemainingMs) / TRADER_COOLDOWN_MS) * 100), 0, 100)
+        : 100;
+
+      return {
+        active: false,
+        ready: cooldownRemainingMs <= 0,
+        progress: cooldownProgress,
+        remainingMs: 0,
+        cooldownRemainingMs
+      };
+    }
+
+    const durationMs = Math.max(1, state.mobileTrader.durationMs || TRADER_DURATION_MS);
+    const elapsedMs = Math.max(0, Date.now() - state.mobileTrader.startedAt);
+    const remainingMs = Math.max(0, durationMs - elapsedMs);
+
+    return {
+      active: true,
+      ready: remainingMs <= 0,
+      progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+      remainingMs,
+      cooldownRemainingMs: getMobileTraderCooldownRemainingMs()
+    };
+  }
+
+  function expireMobileTraderOffer(showFeedback = false) {
+    if (!state.mobileTrader.active) {
+      return false;
+    }
+
+    const dealText = getMobileTraderDealText();
+    state.mobileTrader.expired += 1;
+    clearMobileTraderState();
+    saveState();
+
+    if (showFeedback) {
+      addLog(`Bỏ lỡ báo giá thương nhân: ${dealText}.`);
+      showToast('Deal của thương nhân đã hết hạn');
+    }
+
+    return true;
+  }
+
+  function renderMobileTraderPanel() {
+    if (!refs.mobileTraderStatus || !refs.mobileTraderHint || !refs.mobileTraderMeta || !refs.mobileTraderProgressBar || !refs.mobileTraderActionBtn) {
+      return;
+    }
+
+    const progress = getMobileTraderProgress();
+    refs.mobileTraderMeta.textContent = `Đã chốt ${state.mobileTrader.completed} deal • bỏ lỡ ${state.mobileTrader.expired} deal.`;
+
+    if (progress.active) {
+      const dealText = getMobileTraderDealText();
+      const canAccept = canAcceptMobileTraderDeal();
+      const urgent = progress.remainingMs <= 10000;
+      refs.mobileTraderStatus.textContent = `${dealText} • còn ${Math.ceil(progress.remainingMs / 1000)}s.`;
+      refs.mobileTraderStatus.classList.toggle('urgent-timer', urgent);
+      refs.mobileTraderProgressBar.style.width = `${progress.progress}%`;
+
+      refs.mobileTraderActionBtn.disabled = !canAccept;
+      refs.mobileTraderActionBtn.classList.toggle('opacity-60', !canAccept);
+      refs.mobileTraderActionBtn.classList.toggle('cursor-not-allowed', !canAccept);
+
+      if (canAccept) {
+        refs.mobileTraderHint.textContent = 'Bạn đủ tài nguyên, có thể chốt deal ngay.';
+        if (state.mobileTrader.kind === 'coins_for_eggs') {
+          refs.mobileTraderActionBtn.textContent = `Đổi ngay (+${state.mobileTrader.receiveAmount} trứng)`;
+        } else if (state.mobileTrader.kind === 'eggs_for_coins') {
+          refs.mobileTraderActionBtn.textContent = `Đổi ngay (+${state.mobileTrader.receiveAmount} xu)`;
+        } else {
+          refs.mobileTraderActionBtn.textContent = `Mua ngay (+${state.mobileTrader.receiveAmount} cám)`;
+        }
+        return;
+      }
+
+      if (state.mobileTrader.kind === 'eggs_for_coins') {
+        refs.mobileTraderHint.textContent = `Thiếu ${state.mobileTrader.payAmount - state.eggStock} trứng để chốt deal.`;
+      } else {
+        refs.mobileTraderHint.textContent = `Thiếu ${state.mobileTrader.payAmount - state.coins} xu để chốt deal.`;
+      }
+      refs.mobileTraderActionBtn.textContent = 'Chưa đủ tài nguyên';
+      return;
+    }
+
+    const canGenerate = canGenerateMobileTraderOffer();
+    refs.mobileTraderStatus.classList.remove('urgent-timer');
+    refs.mobileTraderActionBtn.disabled = !canGenerate;
+    refs.mobileTraderActionBtn.classList.toggle('opacity-60', !canGenerate);
+    refs.mobileTraderActionBtn.classList.toggle('cursor-not-allowed', !canGenerate);
+
+    if (canGenerate) {
+      refs.mobileTraderStatus.textContent = 'Sẵn sàng nhận báo giá mới.';
+      refs.mobileTraderHint.textContent = `Mỗi deal có hiệu lực ${Math.round(TRADER_DURATION_MS / 1000)}s, tập trung đổi tài nguyên đang thiếu.`;
+      refs.mobileTraderProgressBar.style.width = '100%';
+      refs.mobileTraderActionBtn.textContent = 'Lấy báo giá mới';
+      return;
+    }
+
+    refs.mobileTraderStatus.textContent = `Thương nhân sẽ quay lại sau ${Math.ceil(progress.cooldownRemainingMs / 1000)}s.`;
+    refs.mobileTraderHint.textContent = `Chu kỳ làm mới báo giá: ${Math.round(TRADER_COOLDOWN_MS / 1000)}s.`;
+    refs.mobileTraderProgressBar.style.width = `${progress.progress}%`;
+    refs.mobileTraderActionBtn.textContent = 'Đang chờ thương nhân';
+  }
+
+  function runMobileTraderTick() {
+    const progress = getMobileTraderProgress();
+    if (!progress.active) {
+      renderMobileTraderPanel();
+      return;
+    }
+
+    if (progress.ready) {
+      expireMobileTraderOffer(true);
+      updateUI();
+      return;
+    }
+
+    renderMobileTraderPanel();
+  }
+
   function renderWholesalePanel() {
     if (!refs.wholesaleStatus || !refs.wholesaleHint || !refs.wholesaleMeta || !refs.wholesaleProgressBar || !refs.startWholesaleBtn) {
       return;
@@ -2131,11 +2404,13 @@ import { getRefs } from './dom.js';
 
     if (!progress.active) {
       refs.eggRushBtn.textContent = `Kích hoạt Mưa Trứng (-${cost} xu)`;
+      refs.eggRushStatus.classList.remove('urgent-timer');
       refs.eggRushStatus.textContent = `Mưa Trứng: tăng tốc trứng rơi và +${EGG_RUSH_COIN_BONUS} xu mỗi trứng trong ${Math.round(EGG_RUSH_DURATION_MS / 1000)}s.`;
       refs.eggRushProgressBar.style.width = '0%';
       return;
     }
 
+    refs.eggRushStatus.classList.toggle('urgent-timer', progress.remainingMs <= 8000);
     refs.eggRushBtn.textContent = 'Mưa Trứng đang chạy';
     refs.eggRushStatus.textContent = `Mưa Trứng còn ${Math.ceil(progress.remainingMs / 1000)}s.`;
     refs.eggRushProgressBar.style.width = `${progress.progress}%`;
@@ -2171,6 +2446,7 @@ import { getRefs } from './dom.js';
 
     if (!progress.active) {
       refs.activateWeatherShieldBtn.textContent = `Bật Khiên (-${cost} xu)`;
+      refs.weatherShieldStatus.classList.remove('urgent-timer');
       refs.weatherShieldStatus.textContent = canActivate
         ? 'Khiên sẵn sàng kích hoạt để bảo vệ đàn gà.'
         : 'Chưa đủ xu để bật Khiên thời tiết.';
@@ -2180,6 +2456,7 @@ import { getRefs } from './dom.js';
     }
 
     refs.activateWeatherShieldBtn.textContent = 'Khiên đang hoạt động';
+    refs.weatherShieldStatus.classList.toggle('urgent-timer', progress.remainingMs <= 8000);
     refs.weatherShieldStatus.textContent = `Khiên còn ${Math.ceil(progress.remainingMs / 1000)}s.`;
     refs.weatherShieldHint.textContent = `Tốc độ trứng bị thời tiết xấu sẽ không chậm hơn ${(WEATHER_SHIELD_MAX_INTERVAL_MS / 1000).toFixed(1)}s/quả.`;
     refs.weatherShieldProgressBar.style.width = `${progress.progress}%`;
@@ -2596,6 +2873,17 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const traderProgress = getMobileTraderProgress();
+    if (traderProgress.active && canAcceptMobileTraderDeal()) {
+      refs.nextActionHint.textContent = 'Gợi ý: báo giá thương nhân đang có lợi, chốt deal trước khi hết hạn.';
+      return;
+    }
+
+    if (!traderProgress.active && traderProgress.ready) {
+      refs.nextActionHint.textContent = 'Gợi ý: mở báo giá mới từ thương nhân lưu động để cân bằng kho tài nguyên.';
+      return;
+    }
+
     if (state.luckySpin.lastSpinDate !== today) {
       refs.nextActionHint.textContent = 'Gợi ý: thử vòng quay may mắn hôm nay để lấy thêm xu/trứng miễn phí.';
       return;
@@ -2814,6 +3102,25 @@ import { getRefs } from './dom.js';
         desc: `Mở thử thách ${Math.round(VIP_VISIT_DURATION_MS / 1000)}s để lấy thêm xu/trứng.`,
         cta: 'Mời khách',
         triggerRef: refs.vipVisitActionBtn
+      });
+    }
+
+    const traderProgress = getMobileTraderProgress();
+    if (traderProgress.active && canAcceptMobileTraderDeal()) {
+      actions.push({
+        id: 'priority_trader_claim',
+        title: 'Deal thương nhân có thể chốt ngay',
+        desc: `${getMobileTraderDealText()} • còn ${Math.ceil(traderProgress.remainingMs / 1000)}s.`,
+        cta: 'Chốt deal',
+        triggerRef: refs.mobileTraderActionBtn
+      });
+    } else if (!traderProgress.active && traderProgress.ready) {
+      actions.push({
+        id: 'priority_trader_new',
+        title: 'Có thể mở báo giá mới',
+        desc: 'Lấy deal mới để tối ưu xu, trứng hoặc cám premium.',
+        cta: 'Mở deal',
+        triggerRef: refs.mobileTraderActionBtn
       });
     }
 
@@ -3055,6 +3362,7 @@ import { getRefs } from './dom.js';
     renderWholesalePanel();
     renderFlashOrderPanel();
     renderVipVisitPanel();
+    renderMobileTraderPanel();
     renderQuickSell();
     renderCoinMachine();
     renderDailyGift();
@@ -3519,6 +3827,81 @@ import { getRefs } from './dom.js';
     showToast(`Khách VIP thưởng +${rewardCoins} xu${rewardEggStock > 0 ? `, +${rewardEggStock} trứng` : ''}`);
   });
 
+  refs.mobileTraderActionBtn.addEventListener('click', () => {
+    const progress = getMobileTraderProgress();
+
+    if (!progress.active) {
+      if (!progress.ready) {
+        showToast(`Thương nhân sẽ quay lại sau ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây`);
+        return;
+      }
+
+      const offer = createMobileTraderOffer();
+      const now = Date.now();
+      state.mobileTrader.active = true;
+      state.mobileTrader.kind = offer.kind;
+      state.mobileTrader.payAmount = offer.payAmount;
+      state.mobileTrader.receiveAmount = offer.receiveAmount;
+      state.mobileTrader.startedAt = now;
+      state.mobileTrader.durationMs = TRADER_DURATION_MS;
+      state.mobileTrader.lastOfferAt = now;
+      saveState();
+      updateUI();
+      addLog(`Nhận báo giá thương nhân: ${getMobileTraderDealText()}.`);
+      showToast(`Deal mới: ${getMobileTraderDealText()}`);
+      return;
+    }
+
+    if (progress.ready) {
+      expireMobileTraderOffer(true);
+      updateUI();
+      return;
+    }
+
+    if (!canAcceptMobileTraderDeal()) {
+      if (state.mobileTrader.kind === 'eggs_for_coins') {
+        showToast(`Thiếu ${state.mobileTrader.payAmount - state.eggStock} trứng để chốt deal`);
+      } else {
+        showToast(`Thiếu ${state.mobileTrader.payAmount - state.coins} xu để chốt deal`);
+      }
+      return;
+    }
+
+    const kind = state.mobileTrader.kind;
+    const payAmount = state.mobileTrader.payAmount;
+    const receiveAmount = state.mobileTrader.receiveAmount;
+
+    if (kind === 'coins_for_eggs') {
+      if (!spendCoins(payAmount)) {
+        showToast('Không đủ xu để chốt deal này');
+        return;
+      }
+      state.eggStock += receiveAmount;
+    } else if (kind === 'eggs_for_coins') {
+      if (state.eggStock < payAmount) {
+        showToast('Không đủ trứng kho để chốt deal');
+        return;
+      }
+      state.eggStock -= payAmount;
+      state.soldEggCount += payAmount;
+      addCoins(receiveAmount);
+    } else {
+      if (!spendCoins(payAmount)) {
+        showToast('Không đủ xu để mua cám premium');
+        return;
+      }
+      state.premiumFeed.packs += receiveAmount;
+    }
+
+    const dealText = getMobileTraderDealText();
+    state.mobileTrader.completed += 1;
+    clearMobileTraderState();
+    saveState();
+    updateUI();
+    addLog(`Chốt deal thương nhân thành công: ${dealText}.`);
+    showToast('Đã chốt deal với thương nhân');
+  });
+
   refs.quickSellOneBtn.addEventListener('click', () => {
     sellEggStock(1);
   });
@@ -3870,6 +4253,8 @@ import { getRefs } from './dom.js';
       refs.flashOrderActionBtn.click();
     } else if (key === 'u') {
       refs.vipVisitActionBtn.click();
+    } else if (key === 'n') {
+      refs.mobileTraderActionBtn.click();
     } else if (key === 'y') {
       refs.activateWeatherShieldBtn.click();
     } else if (key === 't') {
@@ -3976,6 +4361,7 @@ import { getRefs } from './dom.js';
     runEggRushTick();
     runFlashOrderTick();
     runVipVisitTick();
+    runMobileTraderTick();
     runWeatherShieldTick();
     runFeverTick();
     runComboTick();
@@ -3993,6 +4379,7 @@ import { getRefs } from './dom.js';
   runWeatherShieldTick();
   runFlashOrderTick();
   runVipVisitTick();
+  runMobileTraderTick();
   runFeverTick();
   runComboTick();
   updateUI();

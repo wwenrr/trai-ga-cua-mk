@@ -676,6 +676,26 @@ button:disabled {
   transition: width 0.2s linear;
 }
 
+.trader-card {
+  background: linear-gradient(180deg, rgba(245, 243, 255, 0.95) 0%, rgba(237, 233, 254, 0.84) 100%);
+}
+
+.trader-track {
+  width: 100%;
+  height: 0.62rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(109, 40, 217, 0.18);
+}
+
+.trader-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8b5cf6 0%, #6d28d9 100%);
+  transition: width 0.2s linear;
+}
+
 .urgent-timer {
   animation: urgent-pulse 0.8s ease-in-out infinite alternate;
 }
@@ -1254,6 +1274,20 @@ body.night-mode #vipVisitMeta {
 }
 
 body.night-mode .vip-visit-track {
+  background: rgba(148, 163, 184, 0.24);
+}
+
+body.night-mode .trader-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.82) 100%);
+  border-color: rgba(196, 181, 253, 0.34);
+}
+
+body.night-mode #mobileTraderHint,
+body.night-mode #mobileTraderMeta {
+  color: #cbd5e1;
+}
+
+body.night-mode .trader-track {
   background: rgba(148, 163, 184, 0.24);
 }
 
