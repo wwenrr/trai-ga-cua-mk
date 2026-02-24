@@ -11,6 +11,10 @@ export const MARKET_ORDER_MAX_EGGS = 12;
 export const AUTO_FEEDER_MAX_LEVEL = 6;
 export const AUTO_FEEDER_BASE_INTERVAL_MS = 22000;
 export const AUTO_FEEDER_MIN_INTERVAL_MS = 7000;
+export const EGG_RUSH_COST = 42;
+export const EGG_RUSH_DURATION_MS = 30000;
+export const EGG_RUSH_INTERVAL_FACTOR = 0.58;
+export const EGG_RUSH_COIN_BONUS = 2;
 export const PREMIUM_FEED_CRAFT_EGGS = 3;
 export const PREMIUM_FEED_FEED_BONUS = 8;
 export const PREMIUM_FEED_COIN_BONUS = 6;
@@ -106,6 +110,13 @@ export const DEFAULT_STATE = {
     level: 0,
     enabled: false,
     lastFeedAt: 0
+  },
+  autoEggEnabled: true,
+  eggRush: {
+    active: false,
+    startedAt: 0,
+    durationMs: 0,
+    used: 0
   },
   dailyGift: {
     lastClaimDate: '',

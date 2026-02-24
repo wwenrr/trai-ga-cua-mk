@@ -33,6 +33,11 @@ export function getRefs() {
     feedBtn: document.getElementById('feedBtn'),
     factBtn: document.getElementById('factBtn'),
     spawnEggBtn: document.getElementById('spawnEggBtn'),
+    autoEggToggleBtn: document.getElementById('autoEggToggleBtn'),
+    autoEggStatus: document.getElementById('autoEggStatus'),
+    eggRushBtn: document.getElementById('eggRushBtn'),
+    eggRushStatus: document.getElementById('eggRushStatus'),
+    eggRushProgressBar: document.getElementById('eggRushProgressBar'),
     resetBtn: document.getElementById('resetBtn'),
     factText: document.getElementById('factText'),
 

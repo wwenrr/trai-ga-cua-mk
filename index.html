@@ -229,6 +229,21 @@
           <button id="resetBtn" class="px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-lg">Reset thống kê</button>
         </div>
 
+        <div class="egg-engine-panel mt-5">
+          <div class="egg-engine-head">
+            <p class="egg-engine-title">Động cơ trứng tự động</p>
+            <p id="autoEggStatus" class="egg-engine-status">Tự động thả trứng đang hoạt động.</p>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-3">
+            <button id="autoEggToggleBtn" class="px-5 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-lg">Tự động: Bật</button>
+            <button id="eggRushBtn" data-action-cta class="px-5 py-3 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-lg">Kích hoạt Mưa Trứng</button>
+          </div>
+          <p id="eggRushStatus" class="egg-rush-status mt-3">Mưa Trứng chưa kích hoạt.</p>
+          <div class="egg-rush-track mt-2">
+            <div id="eggRushProgressBar" class="egg-rush-bar" style="width: 0%;"></div>
+          </div>
+        </div>
+
         <p id="factText" class="mt-5 text-lg text-slate-700">Bấm "Nghe chuyện vui" để xem fact mới.</p>
       </div>
 
@@ -380,7 +395,7 @@
         <h4 class="text-2xl font-black text-slate-700 mt-8">Nhật ký hoạt động</h4>
         <ul id="actionLog" class="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1"></ul>
 
-        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, L quay may mắn, X dùng cám premium, R thu xu từ máy ủ, H nhận gà con từ lò ấp. Có dock thao tác nhanh ở cuối màn hình.</p>
+        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, P bật/tắt tự động trứng, Z kích hoạt Mưa Trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, L quay may mắn, X dùng cám premium, R thu xu từ máy ủ, H nhận gà con từ lò ấp. Có dock thao tác nhanh ở cuối màn hình.</p>
       </div>
     </div>
   </section>

@@ -12,6 +12,10 @@ import {
   AUTO_FEEDER_MAX_LEVEL,
   AUTO_FEEDER_BASE_INTERVAL_MS,
   AUTO_FEEDER_MIN_INTERVAL_MS,
+  EGG_RUSH_COST,
+  EGG_RUSH_DURATION_MS,
+  EGG_RUSH_INTERVAL_FACTOR,
+  EGG_RUSH_COIN_BONUS,
   PREMIUM_FEED_CRAFT_EGGS,
   PREMIUM_FEED_FEED_BONUS,
   PREMIUM_FEED_COIN_BONUS,
@@ -131,6 +135,38 @@ import { getRefs } from './dom.js';
       level,
       enabled,
       lastFeedAt: level > 0 ? lastFeedAt : 0
+    };
+  }
+
+  function normalizeEggRush(rawRush) {
+    if (!rawRush || typeof rawRush !== 'object') {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        used: 0
+      };
+    }
+
+    const active = Boolean(rawRush.active);
+    const startedAt = toSafeNumber(rawRush.startedAt);
+    const durationMs = clamp(toSafeNumber(rawRush.durationMs), 0, 86400000);
+    const used = toSafeNumber(rawRush.used);
+
+    if (!active || startedAt <= 0 || durationMs <= 0) {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        used
+      };
+    }
+
+    return {
+      active: true,
+      startedAt,
+      durationMs,
+      used
     };
   }
 
@@ -267,6 +303,8 @@ import { getRefs } from './dom.js';
         eggLevel: clamp(toSafeNumber(upgrades.eggLevel), 0, MAX_UPGRADE_LEVEL)
       },
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
+      autoEggEnabled: typeof input.autoEggEnabled === 'boolean' ? input.autoEggEnabled : true,
+      eggRush: normalizeEggRush(input.eggRush),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
       premiumFeed: normalizePremiumFeed(input.premiumFeed),
@@ -402,15 +440,74 @@ import { getRefs } from './dom.js';
     return 1 + Math.floor(state.autoFeeder.level / 2);
   }
 
+  function getEggRushCost() {
+    return EGG_RUSH_COST;
+  }
+
+  function isEggRushRunning() {
+    if (!state.eggRush.active) {
+      return false;
+    }
+
+    const duration = Math.max(1, state.eggRush.durationMs || EGG_RUSH_DURATION_MS);
+    return Date.now() - state.eggRush.startedAt < duration;
+  }
+
+  function getEggRushProgress() {
+    if (!state.eggRush.active) {
+      return {
+        active: false,
+        ready: false,
+        progress: 0,
+        remainingMs: 0
+      };
+    }
+
+    const durationMs = Math.max(1, state.eggRush.durationMs || EGG_RUSH_DURATION_MS);
+    const elapsedMs = Math.max(0, Date.now() - state.eggRush.startedAt);
+    const remainingMs = Math.max(0, durationMs - elapsedMs);
+
+    return {
+      active: true,
+      ready: remainingMs <= 0,
+      progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+      remainingMs
+    };
+  }
+
+  function stopEggRush(completed = false) {
+    if (!state.eggRush.active) {
+      return false;
+    }
+
+    state.eggRush.active = false;
+    state.eggRush.startedAt = 0;
+    state.eggRush.durationMs = 0;
+    saveState();
+    restartAutoEggTimer();
+
+    if (completed) {
+      addLog('Mưa Trứng đã kết thúc.');
+      showToast('Mưa Trứng đã kết thúc');
+    }
+
+    return true;
+  }
+
   function getEggCoinReward() {
     const weatherBonus = WEATHER_CONFIG[state.weather] ? WEATHER_CONFIG[state.weather].eggBonus : 0;
-    return 3 + state.upgrades.eggLevel * 2 + weatherBonus;
+    const rushBonus = isEggRushRunning() ? EGG_RUSH_COIN_BONUS : 0;
+    return 3 + state.upgrades.eggLevel * 2 + weatherBonus + rushBonus;
   }
 
   function getAutoEggInterval() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const reduced = weather.eggInterval - state.upgrades.eggLevel * 140;
-    return Math.max(1700, reduced);
+    const baseInterval = Math.max(1700, reduced);
+    if (isEggRushRunning()) {
+      return Math.max(900, Math.round(baseInterval * EGG_RUSH_INTERVAL_FACTOR));
+    }
+    return baseInterval;
   }
 
   function addCoins(amount) {
@@ -1037,6 +1134,55 @@ import { getRefs } from './dom.js';
     refs.weatherEffect.textContent = `${weather.effect} Tốc độ trứng: ${intervalSec}s/quả.`;
   }
 
+  function renderEggEngine() {
+    if (!refs.autoEggToggleBtn || !refs.autoEggStatus || !refs.eggRushBtn || !refs.eggRushStatus || !refs.eggRushProgressBar) {
+      return;
+    }
+
+    refs.autoEggToggleBtn.textContent = state.autoEggEnabled ? 'Tự động: Bật' : 'Tự động: Tắt';
+    refs.autoEggToggleBtn.classList.toggle('opacity-80', !state.autoEggEnabled);
+
+    if (!state.autoEggEnabled) {
+      refs.autoEggStatus.textContent = 'Tự động thả trứng đang tạm dừng. Bật lại để tiếp tục spawn.';
+    } else {
+      refs.autoEggStatus.textContent = `Tự động thả trứng đang chạy, nhịp hiện tại ${(getAutoEggInterval() / 1000).toFixed(1)}s/quả.`;
+    }
+
+    const progress = getEggRushProgress();
+    const cost = getEggRushCost();
+    const canStartRush = !progress.active && state.coins >= cost;
+
+    refs.eggRushBtn.disabled = progress.active || !canStartRush;
+    refs.eggRushBtn.classList.toggle('opacity-60', progress.active || !canStartRush);
+    refs.eggRushBtn.classList.toggle('cursor-not-allowed', progress.active || !canStartRush);
+
+    if (!progress.active) {
+      refs.eggRushBtn.textContent = `Kích hoạt Mưa Trứng (-${cost} xu)`;
+      refs.eggRushStatus.textContent = `Mưa Trứng: tăng tốc trứng rơi và +${EGG_RUSH_COIN_BONUS} xu mỗi trứng trong ${Math.round(EGG_RUSH_DURATION_MS / 1000)}s.`;
+      refs.eggRushProgressBar.style.width = '0%';
+      return;
+    }
+
+    refs.eggRushBtn.textContent = 'Mưa Trứng đang chạy';
+    refs.eggRushStatus.textContent = `Mưa Trứng còn ${Math.ceil(progress.remainingMs / 1000)}s.`;
+    refs.eggRushProgressBar.style.width = `${progress.progress}%`;
+  }
+
+  function runEggRushTick() {
+    const progress = getEggRushProgress();
+    if (!progress.active) {
+      return;
+    }
+
+    if (progress.ready) {
+      stopEggRush(true);
+      updateUI();
+      return;
+    }
+
+    renderEggEngine();
+  }
+
   function getIncubatorProgress() {
     if (!state.incubator.active) {
       return {
@@ -1139,6 +1285,11 @@ import { getRefs } from './dom.js';
   function restartAutoEggTimer() {
     if (autoEggTimer) {
       clearInterval(autoEggTimer);
+    }
+
+    if (!state.autoEggEnabled) {
+      autoEggTimer = null;
+      return;
     }
 
     autoEggTimer = window.setInterval(() => {
@@ -1299,6 +1450,16 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    if (!state.autoEggEnabled) {
+      refs.nextActionHint.textContent = 'Gợi ý: đang tắt tự động thả trứng, bật lại để tiết kiệm thao tác.';
+      return;
+    }
+
+    if (!isEggRushRunning() && state.coins >= getEggRushCost()) {
+      refs.nextActionHint.textContent = 'Gợi ý: kích hoạt Mưa Trứng để farm xu và trứng nhanh trong ngắn hạn.';
+      return;
+    }
+
     if (state.coins >= getFeedUpgradeCost() && state.upgrades.feedLevel < MAX_UPGRADE_LEVEL) {
       refs.nextActionHint.textContent = 'Gợi ý: đủ xu nâng cấp cho ăn, tăng tốc phát triển đàn gà.';
       return;
@@ -1453,6 +1614,26 @@ import { getRefs } from './dom.js';
       });
     }
 
+    if (!state.autoEggEnabled) {
+      actions.push({
+        id: 'priority_auto_egg',
+        title: 'Tự động thả trứng đang tắt',
+        desc: 'Bật lại để hệ thống tiếp tục tạo trứng theo thời gian.',
+        cta: 'Bật tự động',
+        triggerRef: refs.autoEggToggleBtn
+      });
+    }
+
+    if (!isEggRushRunning() && state.coins >= getEggRushCost()) {
+      actions.push({
+        id: 'priority_egg_rush',
+        title: 'Đủ xu để kích hoạt Mưa Trứng',
+        desc: `Tăng tốc trứng rơi và +${EGG_RUSH_COIN_BONUS} xu mỗi trứng trong ${Math.round(EGG_RUSH_DURATION_MS / 1000)}s.`,
+        cta: 'Kích hoạt',
+        triggerRef: refs.eggRushBtn
+      });
+    }
+
     if (state.autoFeeder.level > 0 && !state.autoFeeder.enabled) {
       actions.push({
         id: 'priority_feeder',
@@ -1578,6 +1759,7 @@ import { getRefs } from './dom.js';
     renderAchievements(mood);
     renderEconomy();
     renderWeather();
+    renderEggEngine();
     renderQuest();
     renderMarketOrder();
     renderQuickSell();
@@ -1750,6 +1932,42 @@ import { getRefs } from './dom.js';
 
   refs.spawnEggBtn.addEventListener('click', () => {
     spawnEgg(false);
+  });
+
+  refs.autoEggToggleBtn.addEventListener('click', () => {
+    state.autoEggEnabled = !state.autoEggEnabled;
+    saveState();
+    restartAutoEggTimer();
+    updateUI();
+    addLog(state.autoEggEnabled ? 'Đã bật tự động thả trứng.' : 'Đã tắt tự động thả trứng.');
+    showToast(state.autoEggEnabled ? 'Tự động thả trứng: Bật' : 'Tự động thả trứng: Tắt');
+  });
+
+  refs.eggRushBtn.addEventListener('click', () => {
+    const current = getEggRushProgress();
+    if (current.active && !current.ready) {
+      showToast('Mưa Trứng đang chạy, chờ hết đợt hiện tại');
+      return;
+    }
+
+    const cost = getEggRushCost();
+    if (!spendCoins(cost)) {
+      showToast('Không đủ xu để kích hoạt Mưa Trứng');
+      return;
+    }
+
+    state.eggRush.active = true;
+    state.eggRush.startedAt = Date.now();
+    state.eggRush.durationMs = EGG_RUSH_DURATION_MS;
+    state.eggRush.used += 1;
+    if (!state.autoEggEnabled) {
+      state.autoEggEnabled = true;
+    }
+    saveState();
+    restartAutoEggTimer();
+    updateUI();
+    addLog(`Kích hoạt Mưa Trứng (-${cost} xu) trong ${Math.round(EGG_RUSH_DURATION_MS / 1000)}s.`);
+    showToast('Mưa Trứng bắt đầu! Trứng rơi nhanh hơn');
   });
 
   refs.startIncubatorBtn.addEventListener('click', () => {
@@ -2086,6 +2304,7 @@ import { getRefs } from './dom.js';
       visitorName: state.visitorName,
       theme: state.theme,
       soundEnabled: state.soundEnabled,
+      autoEggEnabled: state.autoEggEnabled,
       streak: state.streak,
       lastVisitDate: state.lastVisitDate,
       dailyGift: state.dailyGift,
@@ -2142,6 +2361,10 @@ import { getRefs } from './dom.js';
       refs.feedBtn.click();
     } else if (key === 'e') {
       refs.spawnEggBtn.click();
+    } else if (key === 'p') {
+      refs.autoEggToggleBtn.click();
+    } else if (key === 'z') {
+      refs.eggRushBtn.click();
     } else if (key === 't') {
       refs.themeToggleBtn.click();
     } else if (key === 'w') {
@@ -2242,6 +2465,7 @@ import { getRefs } from './dom.js';
   incubatorTickTimer = window.setInterval(() => {
     renderIncubator();
     renderCoinMachine();
+    runEggRushTick();
   }, 1000);
 
   if (autoFeederTickTimer) {
