@@ -4,6 +4,7 @@ export function getRefs() {
     cluckCount: document.getElementById('cluckCount'),
     feedCount: document.getElementById('feedCount'),
     eggCount: document.getElementById('eggCount'),
+    hatchCount: document.getElementById('hatchCount'),
     coinCount: document.getElementById('coinCount'),
     streakCount: document.getElementById('streakCount'),
     moodCount: document.getElementById('moodCount'),
@@ -41,6 +42,10 @@ export function getRefs() {
     weatherLabel: document.getElementById('weatherLabel'),
     weatherEffect: document.getElementById('weatherEffect'),
     rerollWeatherBtn: document.getElementById('rerollWeatherBtn'),
+    incubatorStatus: document.getElementById('incubatorStatus'),
+    incubatorProgressBar: document.getElementById('incubatorProgressBar'),
+    startIncubatorBtn: document.getElementById('startIncubatorBtn'),
+    claimIncubatorBtn: document.getElementById('claimIncubatorBtn'),
 
     actionLog: document.getElementById('actionLog'),
 

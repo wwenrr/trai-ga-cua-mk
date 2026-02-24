@@ -1,6 +1,9 @@
 export const STORAGE_KEY = 'farmBState.v3';
 export const MAX_UPGRADE_LEVEL = 8;
 export const WEATHER_ROTATE_MS = 45000;
+export const INCUBATOR_COST = 12;
+export const INCUBATOR_DURATION_MS = 45000;
+export const INCUBATOR_COIN_REWARD = 18;
 
 export const WEATHER_CONFIG = {
   sunny: {
@@ -65,6 +68,7 @@ export const DEFAULT_STATE = {
   cluckCount: 0,
   feedCount: 0,
   eggCount: 0,
+  hatchCount: 0,
   coins: 0,
   streak: 0,
   lastVisitDate: '',
@@ -76,6 +80,11 @@ export const DEFAULT_STATE = {
   upgrades: {
     feedLevel: 0,
     eggLevel: 0
+  },
+  incubator: {
+    active: false,
+    startedAt: 0,
+    durationMs: 0
   },
   dailyQuest: null,
   achievementRewards: [],
@@ -94,6 +103,7 @@ export const ACHIEVEMENTS = [
   { id: 'cluck_5', label: 'Ca sĩ sân vườn', desc: 'Cục tác ít nhất 5 lần', reward: 16, check: (s) => s.cluckCount >= 5 },
   { id: 'feed_5', label: 'Bếp trưởng', desc: 'Cho ăn ít nhất 5 lần', reward: 18, check: (s) => s.feedCount >= 5 },
   { id: 'egg_3', label: 'Thợ săn trứng', desc: 'Nhặt ít nhất 3 trứng', reward: 20, check: (s) => s.eggCount >= 3 },
+  { id: 'hatch_3', label: 'Lò ấp mát tay', desc: 'Ấp nở ít nhất 3 gà con', reward: 24, check: (s) => s.hatchCount >= 3 },
   { id: 'happy_80', label: 'Đàn gà cực vui', desc: 'Đạt mood từ 80%', reward: 25, check: (_, mood) => mood >= 80 },
   { id: 'legend_100', label: 'Huyền thoại trang trại', desc: 'Đạt mood 100%', reward: 35, check: (_, mood) => mood >= 100 }
 ];

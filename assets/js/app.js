@@ -2,6 +2,9 @@ import {
   STORAGE_KEY,
   MAX_UPGRADE_LEVEL,
   WEATHER_ROTATE_MS,
+  INCUBATOR_COST,
+  INCUBATOR_DURATION_MS,
+  INCUBATOR_COIN_REWARD,
   WEATHER_CONFIG,
   QUEST_METRICS,
   DEFAULT_STATE,
@@ -16,6 +19,7 @@ import { getRefs } from './dom.js';
   let toastTimer;
   let autoEggTimer;
   let weatherCycleTimer;
+  let incubatorTickTimer;
   let audioCtx;
   const state = loadState();
 
@@ -81,6 +85,34 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeIncubator(rawIncubator) {
+    if (!rawIncubator || typeof rawIncubator !== 'object') {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0
+      };
+    }
+
+    const active = Boolean(rawIncubator.active);
+    const startedAt = toSafeNumber(rawIncubator.startedAt);
+    const durationMs = clamp(toSafeNumber(rawIncubator.durationMs), 0, 86400000);
+
+    if (!active || startedAt <= 0 || durationMs <= 0) {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0
+      };
+    }
+
+    return {
+      active: true,
+      startedAt,
+      durationMs
+    };
+  }
+
   function normalizeState(raw) {
     const input = raw && typeof raw === 'object' ? raw : {};
     const upgrades = input.upgrades && typeof input.upgrades === 'object' ? input.upgrades : {};
@@ -90,6 +122,7 @@ import { getRefs } from './dom.js';
       cluckCount: toSafeNumber(input.cluckCount),
       feedCount: toSafeNumber(input.feedCount),
       eggCount: toSafeNumber(input.eggCount),
+      hatchCount: toSafeNumber(input.hatchCount),
       coins: toSafeNumber(input.coins),
       streak: toSafeNumber(input.streak),
       lastVisitDate: typeof input.lastVisitDate === 'string' ? input.lastVisitDate : '',
@@ -102,6 +135,7 @@ import { getRefs } from './dom.js';
         feedLevel: clamp(toSafeNumber(upgrades.feedLevel), 0, MAX_UPGRADE_LEVEL),
         eggLevel: clamp(toSafeNumber(upgrades.eggLevel), 0, MAX_UPGRADE_LEVEL)
       },
+      incubator: normalizeIncubator(input.incubator),
       dailyQuest: normalizeQuest(input.dailyQuest),
       achievementRewards: Array.isArray(input.achievementRewards)
         ? input.achievementRewards.filter((item) => typeof item === 'string').slice(0, 100)
@@ -195,7 +229,10 @@ import { getRefs } from './dom.js';
 
   function getMood() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
-    const base = state.cluckCount * 3 + state.feedCount * (6 + state.upgrades.feedLevel) + state.eggCount * 5;
+    const base = state.cluckCount * 3
+      + state.feedCount * (6 + state.upgrades.feedLevel)
+      + state.eggCount * 5
+      + state.hatchCount * 8;
     return Math.min(100, Math.round(base * weather.moodFactor));
   }
 
@@ -424,6 +461,66 @@ import { getRefs } from './dom.js';
     refs.weatherEffect.textContent = `${weather.effect} Tốc độ trứng: ${intervalSec}s/quả.`;
   }
 
+  function getIncubatorProgress() {
+    if (!state.incubator.active) {
+      return {
+        active: false,
+        ready: false,
+        progress: 0,
+        remainingMs: 0
+      };
+    }
+
+    const durationMs = Math.max(1, state.incubator.durationMs || INCUBATOR_DURATION_MS);
+    const elapsedMs = Math.max(0, Date.now() - state.incubator.startedAt);
+    const remainingMs = Math.max(0, durationMs - elapsedMs);
+
+    return {
+      active: true,
+      ready: remainingMs <= 0,
+      progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+      remainingMs
+    };
+  }
+
+  function renderIncubator() {
+    if (!refs.startIncubatorBtn || !refs.claimIncubatorBtn || !refs.incubatorStatus || !refs.incubatorProgressBar) {
+      return;
+    }
+
+    const progress = getIncubatorProgress();
+
+    const canStart = !progress.active && state.eggCount > 0 && state.coins >= INCUBATOR_COST;
+    refs.startIncubatorBtn.disabled = !canStart;
+    refs.startIncubatorBtn.classList.toggle('opacity-60', !canStart);
+    refs.startIncubatorBtn.classList.toggle('cursor-not-allowed', !canStart);
+    refs.startIncubatorBtn.textContent = `Ủ 1 trứng (${INCUBATOR_COST} xu)`;
+
+    if (!progress.active) {
+      refs.incubatorStatus.textContent = 'Chưa có trứng nào đang ấp.';
+      refs.incubatorProgressBar.style.width = '0%';
+      refs.claimIncubatorBtn.disabled = true;
+      refs.claimIncubatorBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.claimIncubatorBtn.textContent = 'Chưa có trứng để nhận';
+      return;
+    }
+
+    refs.incubatorProgressBar.style.width = `${progress.progress}%`;
+
+    if (progress.ready) {
+      refs.incubatorStatus.textContent = 'Trứng đã nở! Bấm nhận gà con.';
+      refs.claimIncubatorBtn.disabled = false;
+      refs.claimIncubatorBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+      refs.claimIncubatorBtn.textContent = `Nhận gà con (+${INCUBATOR_COIN_REWARD} xu)`;
+      return;
+    }
+
+    refs.incubatorStatus.textContent = `Đang ấp trứng... còn khoảng ${Math.ceil(progress.remainingMs / 1000)} giây.`;
+    refs.claimIncubatorBtn.disabled = true;
+    refs.claimIncubatorBtn.classList.add('opacity-60', 'cursor-not-allowed');
+    refs.claimIncubatorBtn.textContent = 'Đang ấp...';
+  }
+
   function clearEggDrops() {
     refs.eggField.querySelectorAll('.egg-drop').forEach((item) => item.remove());
   }
@@ -530,6 +627,7 @@ import { getRefs } from './dom.js';
     refs.cluckCount.textContent = String(state.cluckCount);
     refs.feedCount.textContent = String(state.feedCount);
     refs.eggCount.textContent = String(state.eggCount);
+    refs.hatchCount.textContent = String(state.hatchCount);
     refs.coinCount.textContent = String(state.coins);
     refs.streakCount.textContent = String(state.streak);
     refs.moodCount.textContent = `${mood}%`;
@@ -551,6 +649,7 @@ import { getRefs } from './dom.js';
     renderEconomy();
     renderWeather();
     renderQuest();
+    renderIncubator();
     renderLogs();
   }
 
@@ -666,6 +765,60 @@ import { getRefs } from './dom.js';
     spawnEgg(false);
   });
 
+  refs.startIncubatorBtn.addEventListener('click', () => {
+    if (state.incubator.active) {
+      showToast('Lò ấp đang hoạt động, chờ trứng nở nhé');
+      return;
+    }
+
+    if (state.eggCount <= 0) {
+      showToast('Bạn chưa có trứng để ấp');
+      return;
+    }
+
+    if (!spendCoins(INCUBATOR_COST)) {
+      showToast('Không đủ xu để bắt đầu ấp trứng');
+      return;
+    }
+
+    state.eggCount -= 1;
+    state.incubator = {
+      active: true,
+      startedAt: Date.now(),
+      durationMs: INCUBATOR_DURATION_MS
+    };
+
+    saveState();
+    updateUI();
+    addLog(`Bắt đầu ấp 1 trứng (-${INCUBATOR_COST} xu).`);
+    showToast('Lò ấp đã khởi động');
+  });
+
+  refs.claimIncubatorBtn.addEventListener('click', () => {
+    const progress = getIncubatorProgress();
+    if (!progress.active) {
+      showToast('Hiện chưa có trứng đang ấp');
+      return;
+    }
+
+    if (!progress.ready) {
+      showToast(`Trứng chưa nở, còn khoảng ${Math.ceil(progress.remainingMs / 1000)} giây`);
+      return;
+    }
+
+    state.incubator = {
+      active: false,
+      startedAt: 0,
+      durationMs: 0
+    };
+    state.hatchCount += 1;
+    addCoins(INCUBATOR_COIN_REWARD);
+    saveState();
+    updateUI();
+    addLog(`Một gà con đã nở, nhận +${INCUBATOR_COIN_REWARD} xu.`);
+    showToast(`Gà con đã nở! +${INCUBATOR_COIN_REWARD} xu`);
+  });
+
   refs.buyFeedUpgradeBtn.addEventListener('click', () => {
     if (state.upgrades.feedLevel >= MAX_UPGRADE_LEVEL) {
       showToast('Nâng cấp cho ăn đã đạt mức tối đa');
@@ -774,6 +927,8 @@ import { getRefs } from './dom.js';
       refs.rerollWeatherBtn.click();
     } else if (key === 'q') {
       refs.claimQuestBtn.click();
+    } else if (key === 'h') {
+      refs.claimIncubatorBtn.click();
     }
   });
 
@@ -837,6 +992,14 @@ import { getRefs } from './dom.js';
   weatherCycleTimer = window.setInterval(() => {
     randomizeWeather(true);
   }, WEATHER_ROTATE_MS);
+
+  if (incubatorTickTimer) {
+    clearInterval(incubatorTickTimer);
+  }
+
+  incubatorTickTimer = window.setInterval(() => {
+    renderIncubator();
+  }, 1000);
 
   updateUI();
   setActiveNav('home');

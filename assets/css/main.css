@@ -116,6 +116,10 @@ body.night-mode #stars {
   transition: width 0.25s ease;
 }
 
+.incubator-bar {
+  transition: width 0.35s linear;
+}
+
 .log-item {
   border: 1px solid #e2e8f0;
   background: #f8fafc;
