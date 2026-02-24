@@ -533,6 +533,54 @@ button:disabled {
   transition: width 0.2s linear;
 }
 
+.fever-panel {
+  border-radius: 0.95rem;
+  border: 1px solid rgba(6, 95, 70, 0.26);
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.92) 0%, rgba(204, 251, 241, 0.78) 100%);
+  padding: 0.78rem;
+}
+
+.fever-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.fever-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0f766e;
+}
+
+.fever-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.fever-cost {
+  font-size: 0.79rem;
+  color: #334155;
+}
+
+.fever-track {
+  width: 100%;
+  height: 0.62rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(15, 118, 110, 0.2);
+}
+
+.fever-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #14b8a6 0%, #0ea5e9 100%);
+  transition: width 0.2s linear;
+}
+
 .decor-grid {
   display: grid;
   gap: 0.75rem;
@@ -1030,6 +1078,24 @@ body.night-mode .combo-timer-text {
 }
 
 body.night-mode .combo-track {
+  background: rgba(148, 163, 184, 0.24);
+}
+
+body.night-mode .fever-panel {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.84) 100%);
+  border-color: rgba(94, 234, 212, 0.3);
+}
+
+body.night-mode .fever-title {
+  color: #5eead4;
+}
+
+body.night-mode .fever-status,
+body.night-mode .fever-cost {
+  color: #e2e8f0;
+}
+
+body.night-mode .fever-track {
   background: rgba(148, 163, 184, 0.24);
 }
 

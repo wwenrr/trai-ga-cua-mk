@@ -19,6 +19,11 @@ import {
   DECOR_ITEMS,
   COMBO_WINDOW_MS,
   COMBO_REWARDS,
+  FEVER_COST_COINS,
+  FEVER_COST_EGGS,
+  FEVER_DURATION_MS,
+  FEVER_COIN_BONUS,
+  FEVER_COMBO_WINDOW_FACTOR,
   PREMIUM_FEED_CRAFT_EGGS,
   PREMIUM_FEED_FEED_BONUS,
   PREMIUM_FEED_COIN_BONUS,
@@ -210,6 +215,38 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeFever(rawFever) {
+    if (!rawFever || typeof rawFever !== 'object') {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        used: 0
+      };
+    }
+
+    const active = Boolean(rawFever.active);
+    const startedAt = toSafeNumber(rawFever.startedAt);
+    const durationMs = clamp(toSafeNumber(rawFever.durationMs), 0, 86400000);
+    const used = toSafeNumber(rawFever.used);
+
+    if (!active || startedAt <= 0 || durationMs <= 0) {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        used
+      };
+    }
+
+    return {
+      active: true,
+      startedAt,
+      durationMs,
+      used
+    };
+  }
+
   function normalizeDailyGift(rawGift) {
     if (!rawGift || typeof rawGift !== 'object') {
       return {
@@ -347,6 +384,7 @@ import { getRefs } from './dom.js';
       eggRush: normalizeEggRush(input.eggRush),
       decorations: normalizeDecorations(input.decorations),
       combo: normalizeCombo(input.combo),
+      fever: normalizeFever(input.fever),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
       premiumFeed: normalizePremiumFeed(input.premiumFeed),
@@ -499,11 +537,78 @@ import { getRefs } from './dom.js';
     return hasDecoration('windmill') ? 0.88 : 1;
   }
 
+  function getComboWindowMs() {
+    if (isFeverRunning()) {
+      return Math.round(COMBO_WINDOW_MS * FEVER_COMBO_WINDOW_FACTOR);
+    }
+    return COMBO_WINDOW_MS;
+  }
+
+  function getFeverCost() {
+    return {
+      coins: FEVER_COST_COINS,
+      eggs: FEVER_COST_EGGS
+    };
+  }
+
+  function isFeverRunning() {
+    if (!state.fever || !state.fever.active) {
+      return false;
+    }
+
+    const duration = Math.max(1, state.fever.durationMs || FEVER_DURATION_MS);
+    return Date.now() - state.fever.startedAt < duration;
+  }
+
+  function getFeverProgress() {
+    if (!state.fever || !state.fever.active) {
+      return {
+        active: false,
+        ready: false,
+        progress: 0,
+        remainingMs: 0
+      };
+    }
+
+    const durationMs = Math.max(1, state.fever.durationMs || FEVER_DURATION_MS);
+    const elapsedMs = Math.max(0, Date.now() - state.fever.startedAt);
+    const remainingMs = Math.max(0, durationMs - elapsedMs);
+
+    return {
+      active: true,
+      ready: remainingMs <= 0,
+      progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+      remainingMs
+    };
+  }
+
+  function stopFever(completed = false) {
+    if (!state.fever || !state.fever.active) {
+      return false;
+    }
+
+    state.fever.active = false;
+    state.fever.startedAt = 0;
+    state.fever.durationMs = 0;
+    saveState();
+
+    if (completed) {
+      addLog('Lễ Hội Gà đã kết thúc.');
+      showToast('Lễ Hội Gà đã kết thúc');
+    }
+
+    return true;
+  }
+
+  function getFeverCoinBonus() {
+    return isFeverRunning() ? FEVER_COIN_BONUS : 0;
+  }
+
   function getComboRemainingMs() {
     if (!state.combo || state.combo.count <= 0 || state.combo.lastActionAt <= 0) {
       return 0;
     }
-    return Math.max(0, COMBO_WINDOW_MS - (Date.now() - state.combo.lastActionAt));
+    return Math.max(0, getComboWindowMs() - (Date.now() - state.combo.lastActionAt));
   }
 
   function isComboActive() {
@@ -627,7 +732,8 @@ import { getRefs } from './dom.js';
     const weatherBonus = WEATHER_CONFIG[state.weather] ? WEATHER_CONFIG[state.weather].eggBonus : 0;
     const rushBonus = isEggRushRunning() ? EGG_RUSH_COIN_BONUS : 0;
     const decorBonus = getDecorationCoinBonus();
-    return 3 + state.upgrades.eggLevel * 2 + weatherBonus + rushBonus + decorBonus;
+    const feverBonus = getFeverCoinBonus();
+    return 3 + state.upgrades.eggLevel * 2 + weatherBonus + rushBonus + decorBonus + feverBonus;
   }
 
   function getAutoEggInterval() {
@@ -1076,7 +1182,7 @@ import { getRefs } from './dom.js';
     const packs = state.premiumFeed.packs;
     const craftCost = getPremiumFeedCraftCost();
     const feedBonus = getPremiumFeedFeedBonus();
-    const coinBonus = getPremiumFeedCoinBonus();
+    const coinBonus = getPremiumFeedCoinBonus() + getFeverCoinBonus();
 
     refs.premiumFeedPacks.textContent = `Bao cám hiện có: ${packs}`;
     refs.premiumFeedStats.textContent = `Đã chế biến ${state.premiumFeed.crafted} bao, đã dùng ${state.premiumFeed.used} lần.`;
@@ -1416,6 +1522,50 @@ import { getRefs } from './dom.js';
     renderEggEngine();
   }
 
+  function renderFeverPanel() {
+    if (!refs.feverStatus || !refs.feverCostInfo || !refs.startFeverBtn || !refs.feverProgressBar) {
+      return;
+    }
+
+    const progress = getFeverProgress();
+    const cost = getFeverCost();
+    const canStart = !progress.active && state.coins >= cost.coins && state.eggStock >= cost.eggs;
+
+    refs.startFeverBtn.disabled = progress.active || !canStart;
+    refs.startFeverBtn.classList.toggle('opacity-60', progress.active || !canStart);
+    refs.startFeverBtn.classList.toggle('cursor-not-allowed', progress.active || !canStart);
+
+    if (!progress.active) {
+      refs.startFeverBtn.textContent = `Bắt đầu Lễ Hội (-${cost.coins} xu, -${cost.eggs} trứng)`;
+      refs.feverStatus.textContent = canStart
+        ? `Sẵn sàng kích hoạt: +${FEVER_COIN_BONUS} xu/hành động và kéo dài nhịp combo.`
+        : 'Cần thêm tài nguyên để kích hoạt Lễ Hội Gà.';
+      refs.feverCostInfo.textContent = `Yêu cầu: ${cost.coins} xu + ${cost.eggs} trứng kho • Buff ${Math.round((FEVER_COMBO_WINDOW_FACTOR - 1) * 100)}% thời gian combo.`;
+      refs.feverProgressBar.style.width = '0%';
+      return;
+    }
+
+    refs.startFeverBtn.textContent = 'Lễ Hội đang chạy';
+    refs.feverStatus.textContent = `Lễ Hội còn ${Math.ceil(progress.remainingMs / 1000)}s • +${FEVER_COIN_BONUS} xu mỗi thao tác.`;
+    refs.feverCostInfo.textContent = `Combo window hiện tại ${(getComboWindowMs() / 1000).toFixed(1)}s • Giữ chuỗi để tận dụng buff.`;
+    refs.feverProgressBar.style.width = `${progress.progress}%`;
+  }
+
+  function runFeverTick() {
+    const progress = getFeverProgress();
+    if (!progress.active) {
+      return;
+    }
+
+    if (progress.ready) {
+      stopFever(true);
+      updateUI();
+      return;
+    }
+
+    renderFeverPanel();
+  }
+
   function renderComboPanel() {
     if (!refs.comboStatus || !refs.comboCount || !refs.comboBest || !refs.comboNextReward || !refs.comboTimerText || !refs.comboProgressBar) {
       return;
@@ -1424,6 +1574,7 @@ import { getRefs } from './dom.js';
     const count = state.combo ? state.combo.count : 0;
     const best = state.combo ? state.combo.best : 0;
     const remainingMs = getComboRemainingMs();
+    const comboWindowMs = getComboWindowMs();
     const active = remainingMs > 0;
     const nextReward = getNextComboReward();
 
@@ -1432,13 +1583,13 @@ import { getRefs } from './dom.js';
 
     if (!active) {
       refs.comboStatus.textContent = 'Chuỗi đang nghỉ. Làm 1 thao tác để bắt đầu.';
-      refs.comboTimerText.textContent = `Giữ nhịp trong ${(COMBO_WINDOW_MS / 1000).toFixed(1)}s giữa mỗi thao tác để không rơi combo.`;
+      refs.comboTimerText.textContent = `Giữ nhịp trong ${(comboWindowMs / 1000).toFixed(1)}s giữa mỗi thao tác để không rơi combo.`;
       refs.comboProgressBar.style.width = '0%';
     } else {
       const remainingSec = (remainingMs / 1000).toFixed(1);
       refs.comboStatus.textContent = `Combo x${count} đang chạy, giữ nhịp để lấy mốc thưởng.`;
       refs.comboTimerText.textContent = `Còn ${remainingSec}s trước khi combo bị ngắt.`;
-      refs.comboProgressBar.style.width = `${clamp(Math.round((remainingMs / COMBO_WINDOW_MS) * 100), 0, 100)}%`;
+      refs.comboProgressBar.style.width = `${clamp(Math.round((remainingMs / comboWindowMs) * 100), 0, 100)}%`;
     }
 
     if (!nextReward) {
@@ -1753,6 +1904,12 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const feverCost = getFeverCost();
+    if (!isFeverRunning() && state.coins >= feverCost.coins && state.eggStock >= feverCost.eggs) {
+      refs.nextActionHint.textContent = 'Gợi ý: bật Lễ Hội Gà để tăng xu theo thao tác và kéo dài nhịp combo.';
+      return;
+    }
+
     const nextComboReward = getNextComboReward();
     if (isComboActive() && nextComboReward) {
       const remaining = nextComboReward.target - state.combo.count;
@@ -1947,6 +2104,17 @@ import { getRefs } from './dom.js';
       });
     }
 
+    const feverCost = getFeverCost();
+    if (!isFeverRunning() && state.coins >= feverCost.coins && state.eggStock >= feverCost.eggs) {
+      actions.push({
+        id: 'priority_fever',
+        title: 'Đủ tài nguyên cho Lễ Hội Gà',
+        desc: `Bật buff +${FEVER_COIN_BONUS} xu/hành động trong ${Math.round(FEVER_DURATION_MS / 1000)}s.`,
+        cta: 'Bắt đầu',
+        triggerRef: refs.startFeverBtn
+      });
+    }
+
     const decorToBuy = DECOR_ITEMS.find((item) => !hasDecoration(item.id) && state.coins >= item.cost);
     if (decorToBuy) {
       const triggerRef = getDecorationButtonRef(decorToBuy.id);
@@ -2102,6 +2270,7 @@ import { getRefs } from './dom.js';
     renderDecorShop();
     renderWeather();
     renderEggEngine();
+    renderFeverPanel();
     renderComboPanel();
     renderQuest();
     renderMarketOrder();
@@ -2119,7 +2288,7 @@ import { getRefs } from './dom.js';
 
   function cluck(n) {
     state.cluckCount += 1;
-    const coinGain = 1 + getDecorationCoinBonus();
+    const coinGain = 1 + getDecorationCoinBonus() + getFeverCoinBonus();
     const combo = registerComboAction('Gọi gà');
     addCoins(coinGain);
     saveState();
@@ -2255,7 +2424,7 @@ import { getRefs } from './dom.js';
 
   refs.feedBtn.addEventListener('click', () => {
     const feedPower = getFeedPower();
-    const coinGain = 2 + state.upgrades.feedLevel + getDecorationCoinBonus();
+    const coinGain = 2 + state.upgrades.feedLevel + getDecorationCoinBonus() + getFeverCoinBonus();
     const combo = registerComboAction('Cho ăn');
 
     state.feedCount += feedPower;
@@ -2314,6 +2483,36 @@ import { getRefs } from './dom.js';
     updateUI();
     addLog(`Kích hoạt Mưa Trứng (-${cost} xu) trong ${Math.round(EGG_RUSH_DURATION_MS / 1000)}s.`);
     showToast('Mưa Trứng bắt đầu! Trứng rơi nhanh hơn');
+  });
+
+  refs.startFeverBtn.addEventListener('click', () => {
+    const progress = getFeverProgress();
+    if (progress.active && !progress.ready) {
+      showToast('Lễ Hội Gà đang chạy, chờ đợt hiện tại kết thúc');
+      return;
+    }
+
+    const cost = getFeverCost();
+    if (!spendCoins(cost.coins)) {
+      showToast('Không đủ xu để bắt đầu Lễ Hội Gà');
+      return;
+    }
+
+    if (state.eggStock < cost.eggs) {
+      addCoins(cost.coins);
+      showToast('Không đủ trứng kho để bắt đầu Lễ Hội Gà');
+      return;
+    }
+
+    state.eggStock -= cost.eggs;
+    state.fever.active = true;
+    state.fever.startedAt = Date.now();
+    state.fever.durationMs = FEVER_DURATION_MS;
+    state.fever.used += 1;
+    saveState();
+    updateUI();
+    addLog(`Kích hoạt Lễ Hội Gà (-${cost.coins} xu, -${cost.eggs} trứng) trong ${Math.round(FEVER_DURATION_MS / 1000)}s.`);
+    showToast('Lễ Hội Gà bắt đầu! Xu thưởng tạm thời tăng');
   });
 
   refs.buyDecorLanternBtn.addEventListener('click', () => {
@@ -2538,7 +2737,7 @@ import { getRefs } from './dom.js';
 
     const combo = registerComboAction('Dùng cám premium');
     const feedBonus = getPremiumFeedFeedBonus();
-    const coinBonus = getPremiumFeedCoinBonus();
+    const coinBonus = getPremiumFeedCoinBonus() + getFeverCoinBonus();
 
     state.premiumFeed.packs -= 1;
     state.premiumFeed.used += 1;
@@ -2724,6 +2923,8 @@ import { getRefs } from './dom.js';
       refs.autoEggToggleBtn.click();
     } else if (key === 'z') {
       refs.eggRushBtn.click();
+    } else if (key === 'v') {
+      refs.startFeverBtn.click();
     } else if (key === 't') {
       refs.themeToggleBtn.click();
     } else if (key === 'w') {
@@ -2825,6 +3026,7 @@ import { getRefs } from './dom.js';
     renderIncubator();
     renderCoinMachine();
     runEggRushTick();
+    runFeverTick();
     runComboTick();
   }, 1000);
 
@@ -2837,6 +3039,7 @@ import { getRefs } from './dom.js';
     renderAutoFeeder();
   }, 1000);
 
+  runFeverTick();
   runComboTick();
   updateUI();
   setActiveNav('home');

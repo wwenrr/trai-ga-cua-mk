@@ -44,6 +44,10 @@ export function getRefs() {
     comboNextReward: document.getElementById('comboNextReward'),
     comboTimerText: document.getElementById('comboTimerText'),
     comboProgressBar: document.getElementById('comboProgressBar'),
+    feverStatus: document.getElementById('feverStatus'),
+    feverCostInfo: document.getElementById('feverCostInfo'),
+    startFeverBtn: document.getElementById('startFeverBtn'),
+    feverProgressBar: document.getElementById('feverProgressBar'),
     resetBtn: document.getElementById('resetBtn'),
     factText: document.getElementById('factText'),
 
