@@ -4,6 +4,8 @@ export const WEATHER_ROTATE_MS = 45000;
 export const INCUBATOR_COST = 12;
 export const INCUBATOR_DURATION_MS = 45000;
 export const INCUBATOR_COIN_REWARD = 18;
+export const MARKET_ORDER_MIN_EGGS = 4;
+export const MARKET_ORDER_MAX_EGGS = 12;
 
 export const WEATHER_CONFIG = {
   sunny: {
@@ -68,6 +70,7 @@ export const DEFAULT_STATE = {
   cluckCount: 0,
   feedCount: 0,
   eggCount: 0,
+  eggStock: 0,
   hatchCount: 0,
   coins: 0,
   streak: 0,
@@ -86,6 +89,7 @@ export const DEFAULT_STATE = {
     startedAt: 0,
     durationMs: 0
   },
+  marketOrder: null,
   dailyQuest: null,
   achievementRewards: [],
   logs: []

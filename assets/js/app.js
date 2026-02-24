@@ -5,6 +5,8 @@ import {
   INCUBATOR_COST,
   INCUBATOR_DURATION_MS,
   INCUBATOR_COIN_REWARD,
+  MARKET_ORDER_MIN_EGGS,
+  MARKET_ORDER_MAX_EGGS,
   WEATHER_CONFIG,
   QUEST_METRICS,
   DEFAULT_STATE,
@@ -85,6 +87,19 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeMarketOrder(rawOrder) {
+    if (!rawOrder || typeof rawOrder !== 'object') {
+      return null;
+    }
+
+    return {
+      date: typeof rawOrder.date === 'string' ? rawOrder.date : getTodayKey(),
+      target: clamp(toSafeNumber(rawOrder.target), MARKET_ORDER_MIN_EGGS, 200),
+      reward: clamp(toSafeNumber(rawOrder.reward), 1, 9999),
+      claimed: Boolean(rawOrder.claimed)
+    };
+  }
+
   function normalizeIncubator(rawIncubator) {
     if (!rawIncubator || typeof rawIncubator !== 'object') {
       return {
@@ -116,12 +131,15 @@ import { getRefs } from './dom.js';
   function normalizeState(raw) {
     const input = raw && typeof raw === 'object' ? raw : {};
     const upgrades = input.upgrades && typeof input.upgrades === 'object' ? input.upgrades : {};
+    const eggCount = toSafeNumber(input.eggCount);
+    const hasEggStock = Object.prototype.hasOwnProperty.call(input, 'eggStock');
 
     return {
       visitorName: typeof input.visitorName === 'string' ? input.visitorName.slice(0, 24) : '',
       cluckCount: toSafeNumber(input.cluckCount),
       feedCount: toSafeNumber(input.feedCount),
-      eggCount: toSafeNumber(input.eggCount),
+      eggCount,
+      eggStock: hasEggStock ? toSafeNumber(input.eggStock) : eggCount,
       hatchCount: toSafeNumber(input.hatchCount),
       coins: toSafeNumber(input.coins),
       streak: toSafeNumber(input.streak),
@@ -136,6 +154,7 @@ import { getRefs } from './dom.js';
         eggLevel: clamp(toSafeNumber(upgrades.eggLevel), 0, MAX_UPGRADE_LEVEL)
       },
       incubator: normalizeIncubator(input.incubator),
+      marketOrder: normalizeMarketOrder(input.marketOrder),
       dailyQuest: normalizeQuest(input.dailyQuest),
       achievementRewards: Array.isArray(input.achievementRewards)
         ? input.achievementRewards.filter((item) => typeof item === 'string').slice(0, 100)
@@ -431,8 +450,65 @@ import { getRefs } from './dom.js';
     }
   }
 
+  function createMarketOrderForDate(dateKey) {
+    const seed = dateKey.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    const range = MARKET_ORDER_MAX_EGGS - MARKET_ORDER_MIN_EGGS + 1;
+    const target = MARKET_ORDER_MIN_EGGS + (seed % range);
+    const reward = target * 8 + 12 + Math.min(state.streak * 2, 24);
+
+    return {
+      date: dateKey,
+      target,
+      reward,
+      claimed: false
+    };
+  }
+
+  function ensureMarketOrder() {
+    const today = getTodayKey();
+    if (state.marketOrder && state.marketOrder.date === today) {
+      return;
+    }
+
+    state.marketOrder = createMarketOrderForDate(today);
+    addLog(`Thương lái cần ${state.marketOrder.target} trứng hôm nay, thưởng ${state.marketOrder.reward} xu.`);
+    saveState();
+  }
+
+  function renderMarketOrder() {
+    if (!refs.orderTitle || !refs.orderDesc || !refs.orderProgressText || !refs.orderProgressBar || !refs.claimOrderBtn) {
+      return;
+    }
+
+    ensureMarketOrder();
+    const order = state.marketOrder;
+
+    const progress = Math.min(order.target, state.eggStock);
+    const percent = Math.round((progress / order.target) * 100);
+    const ready = state.eggStock >= order.target;
+
+    refs.orderTitle.textContent = `📦 Giao ${order.target} trứng`;
+    refs.orderDesc.textContent = `Thưởng ${order.reward} xu nếu giao đủ trong ngày hôm nay.`;
+    refs.orderProgressText.textContent = `${progress}/${order.target} trứng tồn kho`;
+    refs.orderProgressBar.style.width = `${percent}%`;
+
+    const disabled = order.claimed || !ready;
+    refs.claimOrderBtn.disabled = disabled;
+    refs.claimOrderBtn.classList.toggle('opacity-60', disabled);
+    refs.claimOrderBtn.classList.toggle('cursor-not-allowed', disabled);
+
+    if (order.claimed) {
+      refs.claimOrderBtn.textContent = 'Đã giao hôm nay';
+    } else if (ready) {
+      refs.claimOrderBtn.textContent = `Giao trứng (+${order.reward} xu)`;
+    } else {
+      refs.claimOrderBtn.textContent = 'Chưa đủ trứng để giao';
+    }
+  }
+
   function renderEconomy() {
     refs.coinBalance.textContent = String(state.coins);
+    refs.eggStockBalance.textContent = String(state.eggStock);
     refs.feedUpgradeLevel.textContent = `Lv${state.upgrades.feedLevel}`;
     refs.eggUpgradeLevel.textContent = `Lv${state.upgrades.eggLevel}`;
 
@@ -490,7 +566,7 @@ import { getRefs } from './dom.js';
 
     const progress = getIncubatorProgress();
 
-    const canStart = !progress.active && state.eggCount > 0 && state.coins >= INCUBATOR_COST;
+    const canStart = !progress.active && state.eggStock > 0 && state.coins >= INCUBATOR_COST;
     refs.startIncubatorBtn.disabled = !canStart;
     refs.startIncubatorBtn.classList.toggle('opacity-60', !canStart);
     refs.startIncubatorBtn.classList.toggle('cursor-not-allowed', !canStart);
@@ -541,6 +617,7 @@ import { getRefs } from './dom.js';
     egg.addEventListener('click', () => {
       egg.remove();
       state.eggCount += 1;
+      state.eggStock += 1;
       const gain = getEggCoinReward();
       addCoins(gain);
       saveState();
@@ -627,6 +704,7 @@ import { getRefs } from './dom.js';
     refs.cluckCount.textContent = String(state.cluckCount);
     refs.feedCount.textContent = String(state.feedCount);
     refs.eggCount.textContent = String(state.eggCount);
+    refs.eggStock.textContent = String(state.eggStock);
     refs.hatchCount.textContent = String(state.hatchCount);
     refs.coinCount.textContent = String(state.coins);
     refs.streakCount.textContent = String(state.streak);
@@ -649,6 +727,7 @@ import { getRefs } from './dom.js';
     renderEconomy();
     renderWeather();
     renderQuest();
+    renderMarketOrder();
     renderIncubator();
     renderLogs();
   }
@@ -729,6 +808,7 @@ import { getRefs } from './dom.js';
       const imported = normalizeState(JSON.parse(raw));
       Object.assign(state, imported);
       ensureDailyQuest();
+      ensureMarketOrder();
       saveState();
       restartAutoEggTimer();
       updateUI();
@@ -771,7 +851,7 @@ import { getRefs } from './dom.js';
       return;
     }
 
-    if (state.eggCount <= 0) {
+    if (state.eggStock <= 0) {
       showToast('Bạn chưa có trứng để ấp');
       return;
     }
@@ -781,7 +861,7 @@ import { getRefs } from './dom.js';
       return;
     }
 
-    state.eggCount -= 1;
+    state.eggStock -= 1;
     state.incubator = {
       active: true,
       startedAt: Date.now(),
@@ -817,6 +897,29 @@ import { getRefs } from './dom.js';
     updateUI();
     addLog(`Một gà con đã nở, nhận +${INCUBATOR_COIN_REWARD} xu.`);
     showToast(`Gà con đã nở! +${INCUBATOR_COIN_REWARD} xu`);
+  });
+
+  refs.claimOrderBtn.addEventListener('click', () => {
+    ensureMarketOrder();
+    const order = state.marketOrder;
+
+    if (order.claimed) {
+      showToast('Bạn đã giao đơn thương lái hôm nay rồi');
+      return;
+    }
+
+    if (state.eggStock < order.target) {
+      showToast(`Cần thêm ${order.target - state.eggStock} trứng trong kho`);
+      return;
+    }
+
+    state.eggStock -= order.target;
+    order.claimed = true;
+    addCoins(order.reward);
+    addLog(`Giao thành công ${order.target} trứng cho thương lái, nhận +${order.reward} xu.`);
+    saveState();
+    updateUI();
+    showToast(`Đơn hàng hoàn tất: +${order.reward} xu`);
   });
 
   refs.buyFeedUpgradeBtn.addEventListener('click', () => {
@@ -894,6 +997,7 @@ import { getRefs } from './dom.js';
 
     Object.assign(state, normalizeState({ ...DEFAULT_STATE, ...keep }));
     ensureDailyQuest();
+    ensureMarketOrder();
     clearEggDrops();
     saveState();
     restartAutoEggTimer();
@@ -927,6 +1031,8 @@ import { getRefs } from './dom.js';
       refs.rerollWeatherBtn.click();
     } else if (key === 'q') {
       refs.claimQuestBtn.click();
+    } else if (key === 'm') {
+      refs.claimOrderBtn.click();
     } else if (key === 'h') {
       refs.claimIncubatorBtn.click();
     }
@@ -983,6 +1089,7 @@ import { getRefs } from './dom.js';
 
   updateVisitStreak();
   ensureDailyQuest();
+  ensureMarketOrder();
   restartAutoEggTimer();
 
   if (weatherCycleTimer) {
