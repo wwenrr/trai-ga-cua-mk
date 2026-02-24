@@ -38,6 +38,12 @@ export function getRefs() {
     eggRushBtn: document.getElementById('eggRushBtn'),
     eggRushStatus: document.getElementById('eggRushStatus'),
     eggRushProgressBar: document.getElementById('eggRushProgressBar'),
+    comboStatus: document.getElementById('comboStatus'),
+    comboCount: document.getElementById('comboCount'),
+    comboBest: document.getElementById('comboBest'),
+    comboNextReward: document.getElementById('comboNextReward'),
+    comboTimerText: document.getElementById('comboTimerText'),
+    comboProgressBar: document.getElementById('comboProgressBar'),
     resetBtn: document.getElementById('resetBtn'),
     factText: document.getElementById('factText'),
 

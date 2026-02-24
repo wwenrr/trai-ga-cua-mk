@@ -17,6 +17,8 @@ import {
   EGG_RUSH_INTERVAL_FACTOR,
   EGG_RUSH_COIN_BONUS,
   DECOR_ITEMS,
+  COMBO_WINDOW_MS,
+  COMBO_REWARDS,
   PREMIUM_FEED_CRAFT_EGGS,
   PREMIUM_FEED_FEED_BONUS,
   PREMIUM_FEED_COIN_BONUS,
@@ -180,6 +182,34 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeCombo(rawCombo) {
+    if (!rawCombo || typeof rawCombo !== 'object') {
+      return {
+        count: 0,
+        best: 0,
+        lastActionAt: 0,
+        claimedTargets: []
+      };
+    }
+
+    const count = clamp(toSafeNumber(rawCombo.count), 0, 999);
+    const best = Math.max(count, toSafeNumber(rawCombo.best));
+    const lastActionAt = toSafeNumber(rawCombo.lastActionAt);
+    const rawTargets = Array.isArray(rawCombo.claimedTargets) ? rawCombo.claimedTargets : [];
+    const targetSet = new Set(
+      rawTargets
+        .map((target) => toSafeNumber(target))
+        .filter((target) => target > 0)
+    );
+
+    return {
+      count,
+      best,
+      lastActionAt: count > 0 ? lastActionAt : 0,
+      claimedTargets: Array.from(targetSet).sort((a, b) => a - b).slice(0, COMBO_REWARDS.length)
+    };
+  }
+
   function normalizeDailyGift(rawGift) {
     if (!rawGift || typeof rawGift !== 'object') {
       return {
@@ -316,6 +346,7 @@ import { getRefs } from './dom.js';
       autoEggEnabled: typeof input.autoEggEnabled === 'boolean' ? input.autoEggEnabled : true,
       eggRush: normalizeEggRush(input.eggRush),
       decorations: normalizeDecorations(input.decorations),
+      combo: normalizeCombo(input.combo),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
       premiumFeed: normalizePremiumFeed(input.premiumFeed),
@@ -466,6 +497,76 @@ import { getRefs } from './dom.js';
 
   function getWindmillIntervalFactor() {
     return hasDecoration('windmill') ? 0.88 : 1;
+  }
+
+  function getComboRemainingMs() {
+    if (!state.combo || state.combo.count <= 0 || state.combo.lastActionAt <= 0) {
+      return 0;
+    }
+    return Math.max(0, COMBO_WINDOW_MS - (Date.now() - state.combo.lastActionAt));
+  }
+
+  function isComboActive() {
+    return getComboRemainingMs() > 0;
+  }
+
+  function formatComboReward(reward) {
+    const parts = [];
+    if (reward.coins > 0) {
+      parts.push(`+${reward.coins} xu`);
+    }
+    if (reward.eggStock > 0) {
+      parts.push(`+${reward.eggStock} trứng kho`);
+    }
+    if (reward.premiumFeed > 0) {
+      parts.push(`+${reward.premiumFeed} cám premium`);
+    }
+    return parts.join(' • ');
+  }
+
+  function getNextComboReward() {
+    const claimed = new Set(state.combo && Array.isArray(state.combo.claimedTargets) ? state.combo.claimedTargets : []);
+    return COMBO_REWARDS.find((reward) => !claimed.has(reward.target)) || null;
+  }
+
+  function registerComboAction(sourceLabel) {
+    const now = Date.now();
+    const wasActive = isComboActive();
+    if (wasActive) {
+      state.combo.count += 1;
+    } else {
+      state.combo.count = 1;
+      state.combo.claimedTargets = [];
+    }
+
+    state.combo.lastActionAt = now;
+    if (state.combo.count > state.combo.best) {
+      state.combo.best = state.combo.count;
+    }
+
+    const claimed = new Set(state.combo.claimedTargets);
+    const unlocked = COMBO_REWARDS.filter((reward) => state.combo.count >= reward.target && !claimed.has(reward.target));
+    if (unlocked.length === 0) {
+      return {
+        count: state.combo.count,
+        rewardText: ''
+      };
+    }
+
+    const rewardTexts = [];
+    unlocked.forEach((reward) => {
+      state.combo.claimedTargets.push(reward.target);
+      addCoins(reward.coins);
+      state.eggStock += reward.eggStock;
+      state.premiumFeed.packs += reward.premiumFeed;
+      rewardTexts.push(`x${reward.target}: ${formatComboReward(reward)}`);
+    });
+
+    addLog(`${sourceLabel}: đạt thưởng combo ${rewardTexts.join(' | ')}.`, false);
+    return {
+      count: state.combo.count,
+      rewardText: rewardTexts.join(' | ')
+    };
   }
 
   function getEggRushCost() {
@@ -1315,6 +1416,65 @@ import { getRefs } from './dom.js';
     renderEggEngine();
   }
 
+  function renderComboPanel() {
+    if (!refs.comboStatus || !refs.comboCount || !refs.comboBest || !refs.comboNextReward || !refs.comboTimerText || !refs.comboProgressBar) {
+      return;
+    }
+
+    const count = state.combo ? state.combo.count : 0;
+    const best = state.combo ? state.combo.best : 0;
+    const remainingMs = getComboRemainingMs();
+    const active = remainingMs > 0;
+    const nextReward = getNextComboReward();
+
+    refs.comboCount.textContent = `x${count}`;
+    refs.comboBest.textContent = `x${best}`;
+
+    if (!active) {
+      refs.comboStatus.textContent = 'Chuỗi đang nghỉ. Làm 1 thao tác để bắt đầu.';
+      refs.comboTimerText.textContent = `Giữ nhịp trong ${(COMBO_WINDOW_MS / 1000).toFixed(1)}s giữa mỗi thao tác để không rơi combo.`;
+      refs.comboProgressBar.style.width = '0%';
+    } else {
+      const remainingSec = (remainingMs / 1000).toFixed(1);
+      refs.comboStatus.textContent = `Combo x${count} đang chạy, giữ nhịp để lấy mốc thưởng.`;
+      refs.comboTimerText.textContent = `Còn ${remainingSec}s trước khi combo bị ngắt.`;
+      refs.comboProgressBar.style.width = `${clamp(Math.round((remainingMs / COMBO_WINDOW_MS) * 100), 0, 100)}%`;
+    }
+
+    if (!nextReward) {
+      refs.comboNextReward.textContent = 'Đã mở hết mốc thưởng combo của chuỗi hiện tại.';
+      return;
+    }
+
+    const remainingSteps = Math.max(0, nextReward.target - count);
+    refs.comboNextReward.textContent = remainingSteps > 0
+      ? `x${nextReward.target} (còn ${remainingSteps}) • ${formatComboReward(nextReward)}`
+      : `x${nextReward.target} • ${formatComboReward(nextReward)}`;
+  }
+
+  function runComboTick() {
+    if (!state.combo || state.combo.count <= 0) {
+      renderComboPanel();
+      return;
+    }
+
+    if (isComboActive()) {
+      renderComboPanel();
+      return;
+    }
+
+    const endedAt = state.combo.count;
+    const shouldLog = endedAt >= COMBO_REWARDS[0].target;
+    state.combo.count = 0;
+    state.combo.lastActionAt = 0;
+    state.combo.claimedTargets = [];
+    if (shouldLog) {
+      addLog(`Chuỗi hưng phấn kết thúc ở mốc x${endedAt}.`, false);
+    }
+    saveState();
+    updateUI();
+  }
+
   function getIncubatorProgress() {
     if (!state.incubator.active) {
       return {
@@ -1396,11 +1556,12 @@ import { getRefs } from './dom.js';
       egg.remove();
       state.eggCount += 1;
       state.eggStock += 1;
+      const combo = registerComboAction('Nhặt trứng');
       const gain = getEggCoinReward();
       addCoins(gain);
       saveState();
       updateUI();
-      showToast(`Bạn vừa nhặt trứng (+${gain} xu)`);
+      showToast(`Bạn vừa nhặt trứng (+${gain} xu) • Combo x${combo.count}${combo.rewardText ? ` • ${combo.rewardText}` : ''}`);
     });
 
     egg.addEventListener('animationend', () => {
@@ -1592,6 +1753,15 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const nextComboReward = getNextComboReward();
+    if (isComboActive() && nextComboReward) {
+      const remaining = nextComboReward.target - state.combo.count;
+      if (remaining > 0 && remaining <= 2) {
+        refs.nextActionHint.textContent = `Gợi ý: còn ${remaining} thao tác để chạm combo x${nextComboReward.target} (${formatComboReward(nextComboReward)}).`;
+        return;
+      }
+    }
+
     const decorToBuy = DECOR_ITEMS.find((item) => !hasDecoration(item.id) && state.coins >= item.cost);
     if (decorToBuy) {
       refs.nextActionHint.textContent = `Gợi ý: đủ xu mở khóa ${decorToBuy.label}, buff sẽ có hiệu lực vĩnh viễn.`;
@@ -1605,6 +1775,11 @@ import { getRefs } from './dom.js';
 
     if (state.autoFeeder.level > 0 && !state.autoFeeder.enabled) {
       refs.nextActionHint.textContent = 'Gợi ý: bật trợ lý tự động (phím A) để duy trì nhịp tăng trưởng.';
+      return;
+    }
+
+    if (!isComboActive()) {
+      refs.nextActionHint.textContent = 'Gợi ý: nối nhanh gọi gà, cho ăn, nhặt trứng để khởi động chuỗi thưởng combo.';
       return;
     }
 
@@ -1786,6 +1961,20 @@ import { getRefs } from './dom.js';
       }
     }
 
+    const comboReward = getNextComboReward();
+    if (comboReward && isComboActive()) {
+      const remainSteps = comboReward.target - state.combo.count;
+      if (remainSteps > 0 && remainSteps <= 2) {
+        actions.push({
+          id: 'priority_combo_finish',
+          title: `Combo x${state.combo.count} sắp chạm mốc`,
+          desc: `Còn ${remainSteps} thao tác để nhận ${formatComboReward(comboReward)}.`,
+          cta: 'Tiếp tục combo',
+          triggerRef: refs.feedBtn
+        });
+      }
+    }
+
     if (state.autoFeeder.level > 0 && !state.autoFeeder.enabled) {
       actions.push({
         id: 'priority_feeder',
@@ -1913,6 +2102,7 @@ import { getRefs } from './dom.js';
     renderDecorShop();
     renderWeather();
     renderEggEngine();
+    renderComboPanel();
     renderQuest();
     renderMarketOrder();
     renderQuickSell();
@@ -1930,6 +2120,7 @@ import { getRefs } from './dom.js';
   function cluck(n) {
     state.cluckCount += 1;
     const coinGain = 1 + getDecorationCoinBonus();
+    const combo = registerComboAction('Gọi gà');
     addCoins(coinGain);
     saveState();
     updateUI();
@@ -1941,7 +2132,7 @@ import { getRefs } from './dom.js';
       2: 'Gà B 2: Cục... tác... zzz...'
     };
 
-    showToast(`${lines[n] || 'Cục tác!'} (+${coinGain} xu)`);
+    showToast(`${lines[n] || 'Cục tác!'} (+${coinGain} xu) • Combo x${combo.count}${combo.rewardText ? ` • ${combo.rewardText}` : ''}`);
   }
 
   window.cluck = cluck;
@@ -2065,6 +2256,7 @@ import { getRefs } from './dom.js';
   refs.feedBtn.addEventListener('click', () => {
     const feedPower = getFeedPower();
     const coinGain = 2 + state.upgrades.feedLevel + getDecorationCoinBonus();
+    const combo = registerComboAction('Cho ăn');
 
     state.feedCount += feedPower;
     addCoins(coinGain);
@@ -2074,7 +2266,7 @@ import { getRefs } from './dom.js';
     bounceChicken(1);
     bounceChicken(2);
 
-    showToast(`Đã cho ăn +${feedPower} lượt, +${coinGain} xu`);
+    showToast(`Đã cho ăn +${feedPower} lượt, +${coinGain} xu • Combo x${combo.count}${combo.rewardText ? ` • ${combo.rewardText}` : ''}`);
   });
 
   refs.factBtn.addEventListener('click', () => {
@@ -2344,6 +2536,7 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const combo = registerComboAction('Dùng cám premium');
     const feedBonus = getPremiumFeedFeedBonus();
     const coinBonus = getPremiumFeedCoinBonus();
 
@@ -2357,7 +2550,7 @@ import { getRefs } from './dom.js';
     bounceChicken(1);
     bounceChicken(2);
     addLog(`Dùng cám premium: +${feedBonus} lượt cho ăn, +${coinBonus} xu.`);
-    showToast(`Cám premium: +${feedBonus} cho ăn, +${coinBonus} xu`);
+    showToast(`Cám premium: +${feedBonus} cho ăn, +${coinBonus} xu • Combo x${combo.count}${combo.rewardText ? ` • ${combo.rewardText}` : ''}`);
   });
 
   refs.buyFeedUpgradeBtn.addEventListener('click', () => {
@@ -2632,6 +2825,7 @@ import { getRefs } from './dom.js';
     renderIncubator();
     renderCoinMachine();
     runEggRushTick();
+    runComboTick();
   }, 1000);
 
   if (autoFeederTickTimer) {
@@ -2643,6 +2837,7 @@ import { getRefs } from './dom.js';
     renderAutoFeeder();
   }, 1000);
 
+  runComboTick();
   updateUI();
   setActiveNav('home');
 })();

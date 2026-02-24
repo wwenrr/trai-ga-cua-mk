@@ -244,6 +244,33 @@
           </div>
         </div>
 
+        <div class="combo-panel mt-5">
+          <div class="combo-head">
+            <p class="combo-title">Chuỗi hưng phấn</p>
+            <p id="comboStatus" class="combo-status">Bắt đầu bằng 1 hành động để lên combo.</p>
+          </div>
+
+          <div class="combo-stats mt-3">
+            <div class="combo-chip">
+              <span class="combo-chip-label">Chuỗi hiện tại</span>
+              <strong id="comboCount" class="combo-chip-value">x0</strong>
+            </div>
+            <div class="combo-chip">
+              <span class="combo-chip-label">Kỷ lục</span>
+              <strong id="comboBest" class="combo-chip-value">x0</strong>
+            </div>
+            <div class="combo-chip combo-chip-wide">
+              <span class="combo-chip-label">Mốc thưởng kế tiếp</span>
+              <strong id="comboNextReward" class="combo-chip-value">x5 • +18 xu • +1 trứng kho</strong>
+            </div>
+          </div>
+
+          <p id="comboTimerText" class="combo-timer-text mt-3">Combo sẽ reset nếu ngắt quá lâu.</p>
+          <div class="combo-track mt-2">
+            <div id="comboProgressBar" class="combo-bar" style="width: 0%;"></div>
+          </div>
+        </div>
+
         <p id="factText" class="mt-5 text-lg text-slate-700">Bấm "Nghe chuyện vui" để xem fact mới.</p>
       </div>
 
@@ -423,7 +450,7 @@
         <h4 class="text-2xl font-black text-slate-700 mt-8">Nhật ký hoạt động</h4>
         <ul id="actionLog" class="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1"></ul>
 
-        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, P bật/tắt tự động trứng, Z kích hoạt Mưa Trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, L quay may mắn, X dùng cám premium, R thu xu từ máy ủ, H nhận gà con từ lò ấp. Có dock thao tác nhanh ở cuối màn hình.</p>
+        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, P bật/tắt tự động trứng, Z kích hoạt Mưa Trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, L quay may mắn, X dùng cám premium, R thu xu từ máy ủ, H nhận gà con từ lò ấp. Combo nối nhanh trong 6.5 giây giữa các thao tác gọi/cho ăn/nhặt trứng để nhận thưởng mốc. Có dock thao tác nhanh ở cuối màn hình.</p>
       </div>
     </div>
   </section>

@@ -35,6 +35,27 @@ export const DECOR_ITEMS = [
     effect: 'Tăng mood thụ động +8%.'
   }
 ];
+export const COMBO_WINDOW_MS = 6500;
+export const COMBO_REWARDS = [
+  {
+    target: 5,
+    coins: 18,
+    eggStock: 1,
+    premiumFeed: 0
+  },
+  {
+    target: 10,
+    coins: 34,
+    eggStock: 1,
+    premiumFeed: 1
+  },
+  {
+    target: 16,
+    coins: 60,
+    eggStock: 2,
+    premiumFeed: 1
+  }
+];
 export const PREMIUM_FEED_CRAFT_EGGS = 3;
 export const PREMIUM_FEED_FEED_BONUS = 8;
 export const PREMIUM_FEED_COIN_BONUS = 6;
@@ -142,6 +163,12 @@ export const DEFAULT_STATE = {
     lantern: false,
     windmill: false,
     musicBox: false
+  },
+  combo: {
+    count: 0,
+    best: 0,
+    lastActionAt: 0,
+    claimedTargets: []
   },
   dailyGift: {
     lastClaimDate: '',
