@@ -250,6 +250,17 @@
             <button id="rerollWeatherBtn" class="mt-4 w-full px-4 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-lg">Đổi thời tiết</button>
           </section>
 
+          <section class="rounded-2xl border-2 border-rose-200 p-4 lab-card">
+            <h4 class="text-2xl font-black text-rose-700">Quà điểm danh</h4>
+            <p id="giftStatus" class="mt-2 text-lg font-black">Mỗi ngày nhận quà 1 lần.</p>
+            <p id="giftReward" class="mt-1 text-base text-slate-700"></p>
+            <p id="giftProgressText" class="mt-3 text-base font-black">Chuỗi 0/7 ngày</p>
+            <div class="mt-2 w-full h-3 rounded-full bg-rose-100 overflow-hidden">
+              <div id="giftProgressBar" class="gift-bar h-full bg-rose-500" style="width: 0%;"></div>
+            </div>
+            <button id="claimGiftBtn" class="mt-4 w-full px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-lg">Nhận quà hôm nay</button>
+          </section>
+
           <section class="rounded-2xl border-2 border-orange-200 p-4 lg:col-span-2 lab-card">
             <h4 class="text-2xl font-black text-orange-700">Đơn hàng thương lái</h4>
             <p id="orderTitle" class="mt-2 text-lg font-black">Đang tạo đơn hàng...</p>
@@ -279,7 +290,7 @@
         <h4 class="text-2xl font-black text-slate-700 mt-8">Nhật ký hoạt động</h4>
         <ul id="actionLog" class="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1"></ul>
 
-        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, A bật/tắt trợ lý tự động, H nhận gà con từ lò ấp. Có dock thao tác nhanh ở cuối màn hình.</p>
+        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, A bật/tắt trợ lý tự động, G nhận quà điểm danh, H nhận gà con từ lò ấp. Có dock thao tác nhanh ở cuối màn hình.</p>
       </div>
     </div>
   </section>

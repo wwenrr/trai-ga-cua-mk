@@ -124,6 +124,20 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeDailyGift(rawGift) {
+    if (!rawGift || typeof rawGift !== 'object') {
+      return {
+        lastClaimDate: '',
+        totalClaimed: 0
+      };
+    }
+
+    return {
+      lastClaimDate: typeof rawGift.lastClaimDate === 'string' ? rawGift.lastClaimDate : '',
+      totalClaimed: toSafeNumber(rawGift.totalClaimed)
+    };
+  }
+
   function normalizeIncubator(rawIncubator) {
     if (!rawIncubator || typeof rawIncubator !== 'object') {
       return {
@@ -178,6 +192,7 @@ import { getRefs } from './dom.js';
         eggLevel: clamp(toSafeNumber(upgrades.eggLevel), 0, MAX_UPGRADE_LEVEL)
       },
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
+      dailyGift: normalizeDailyGift(input.dailyGift),
       incubator: normalizeIncubator(input.incubator),
       marketOrder: normalizeMarketOrder(input.marketOrder),
       dailyQuest: normalizeQuest(input.dailyQuest),
@@ -548,6 +563,40 @@ import { getRefs } from './dom.js';
     }
   }
 
+  function getDailyGiftReward() {
+    const coins = 20 + Math.min(state.streak * 4, 56);
+    const eggStock = state.streak >= 7 ? 4 : 0;
+    return { coins, eggStock };
+  }
+
+  function renderDailyGift() {
+    if (!refs.giftStatus || !refs.giftReward || !refs.giftProgressText || !refs.giftProgressBar || !refs.claimGiftBtn) {
+      return;
+    }
+
+    const today = getTodayKey();
+    const claimedToday = state.dailyGift.lastClaimDate === today;
+    const reward = getDailyGiftReward();
+    const progress = Math.min(100, Math.round((Math.min(state.streak, 7) / 7) * 100));
+
+    refs.giftReward.textContent = `Quà hôm nay: +${reward.coins} xu${reward.eggStock > 0 ? `, +${reward.eggStock} trứng kho` : ''}.`;
+    refs.giftProgressText.textContent = `Chuỗi ${Math.min(state.streak, 7)}/7 ngày`;
+    refs.giftProgressBar.style.width = `${progress}%`;
+
+    refs.claimGiftBtn.disabled = claimedToday;
+    refs.claimGiftBtn.classList.toggle('opacity-60', claimedToday);
+    refs.claimGiftBtn.classList.toggle('cursor-not-allowed', claimedToday);
+
+    if (claimedToday) {
+      refs.giftStatus.textContent = 'Bạn đã nhận quà hôm nay rồi.';
+      refs.claimGiftBtn.textContent = 'Đã nhận hôm nay';
+      return;
+    }
+
+    refs.giftStatus.textContent = 'Có thể nhận quà điểm danh ngay bây giờ.';
+    refs.claimGiftBtn.textContent = 'Nhận quà hôm nay';
+  }
+
   function getAutoFeederProgress() {
     if (state.autoFeeder.level <= 0 || !state.autoFeeder.enabled) {
       return {
@@ -856,6 +905,7 @@ import { getRefs } from './dom.js';
     renderWeather();
     renderQuest();
     renderMarketOrder();
+    renderDailyGift();
     renderAutoFeeder();
     renderIncubator();
     renderLogs();
@@ -1051,6 +1101,27 @@ import { getRefs } from './dom.js';
     showToast(`Đơn hàng hoàn tất: +${order.reward} xu`);
   });
 
+  refs.claimGiftBtn.addEventListener('click', () => {
+    const today = getTodayKey();
+    if (state.dailyGift.lastClaimDate === today) {
+      showToast('Bạn đã nhận quà điểm danh hôm nay rồi');
+      return;
+    }
+
+    const reward = getDailyGiftReward();
+    state.dailyGift.lastClaimDate = today;
+    state.dailyGift.totalClaimed += 1;
+    addCoins(reward.coins);
+    if (reward.eggStock > 0) {
+      state.eggStock += reward.eggStock;
+    }
+
+    saveState();
+    updateUI();
+    addLog(`Nhận quà điểm danh ngày: +${reward.coins} xu${reward.eggStock > 0 ? `, +${reward.eggStock} trứng kho` : ''}.`);
+    showToast(`Điểm danh thành công: +${reward.coins} xu${reward.eggStock > 0 ? `, +${reward.eggStock} trứng` : ''}`);
+  });
+
   refs.buyFeedUpgradeBtn.addEventListener('click', () => {
     if (state.upgrades.feedLevel >= MAX_UPGRADE_LEVEL) {
       showToast('Nâng cấp cho ăn đã đạt mức tối đa');
@@ -1162,7 +1233,8 @@ import { getRefs } from './dom.js';
       theme: state.theme,
       soundEnabled: state.soundEnabled,
       streak: state.streak,
-      lastVisitDate: state.lastVisitDate
+      lastVisitDate: state.lastVisitDate,
+      dailyGift: state.dailyGift
     };
 
     Object.assign(state, normalizeState({ ...DEFAULT_STATE, ...keep }));
@@ -1225,6 +1297,8 @@ import { getRefs } from './dom.js';
       refs.claimOrderBtn.click();
     } else if (key === 'a') {
       refs.toggleAutoFeederBtn.click();
+    } else if (key === 'g') {
+      refs.claimGiftBtn.click();
     } else if (key === 'h') {
       refs.claimIncubatorBtn.click();
     }

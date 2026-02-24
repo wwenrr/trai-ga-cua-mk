@@ -92,6 +92,10 @@ export const DEFAULT_STATE = {
     enabled: false,
     lastFeedAt: 0
   },
+  dailyGift: {
+    lastClaimDate: '',
+    totalClaimed: 0
+  },
   incubator: {
     active: false,
     startedAt: 0,

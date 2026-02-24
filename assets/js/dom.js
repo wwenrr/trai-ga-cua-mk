@@ -39,6 +39,11 @@ export function getRefs() {
     autoFeederProgressBar: document.getElementById('autoFeederProgressBar'),
     buyAutoFeederBtn: document.getElementById('buyAutoFeederBtn'),
     toggleAutoFeederBtn: document.getElementById('toggleAutoFeederBtn'),
+    giftStatus: document.getElementById('giftStatus'),
+    giftReward: document.getElementById('giftReward'),
+    giftProgressText: document.getElementById('giftProgressText'),
+    giftProgressBar: document.getElementById('giftProgressBar'),
+    claimGiftBtn: document.getElementById('claimGiftBtn'),
 
     questTitle: document.getElementById('questTitle'),
     questDesc: document.getElementById('questDesc'),
