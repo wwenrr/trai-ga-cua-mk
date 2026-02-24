@@ -16,6 +16,7 @@ import {
   EGG_RUSH_DURATION_MS,
   EGG_RUSH_INTERVAL_FACTOR,
   EGG_RUSH_COIN_BONUS,
+  DECOR_ITEMS,
   PREMIUM_FEED_CRAFT_EGGS,
   PREMIUM_FEED_FEED_BONUS,
   PREMIUM_FEED_COIN_BONUS,
@@ -170,6 +171,15 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeDecorations(rawDecorations) {
+    const input = rawDecorations && typeof rawDecorations === 'object' ? rawDecorations : {};
+    return {
+      lantern: Boolean(input.lantern),
+      windmill: Boolean(input.windmill),
+      musicBox: Boolean(input.musicBox)
+    };
+  }
+
   function normalizeDailyGift(rawGift) {
     if (!rawGift || typeof rawGift !== 'object') {
       return {
@@ -305,6 +315,7 @@ import { getRefs } from './dom.js';
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
       autoEggEnabled: typeof input.autoEggEnabled === 'boolean' ? input.autoEggEnabled : true,
       eggRush: normalizeEggRush(input.eggRush),
+      decorations: normalizeDecorations(input.decorations),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
       premiumFeed: normalizePremiumFeed(input.premiumFeed),
@@ -408,7 +419,8 @@ import { getRefs } from './dom.js';
       + state.feedCount * (6 + state.upgrades.feedLevel)
       + state.eggCount * 5
       + state.hatchCount * 8;
-    return Math.min(100, Math.round(base * weather.moodFactor));
+    const decorated = Math.round(base * weather.moodFactor) + getDecorationMoodBonus();
+    return Math.min(100, decorated);
   }
 
   function getFeedPower() {
@@ -438,6 +450,22 @@ import { getRefs } from './dom.js';
 
   function getAutoFeederCoinReward() {
     return 1 + Math.floor(state.autoFeeder.level / 2);
+  }
+
+  function hasDecoration(id) {
+    return Boolean(state.decorations && state.decorations[id]);
+  }
+
+  function getDecorationCoinBonus() {
+    return hasDecoration('lantern') ? 1 : 0;
+  }
+
+  function getDecorationMoodBonus() {
+    return hasDecoration('musicBox') ? 8 : 0;
+  }
+
+  function getWindmillIntervalFactor() {
+    return hasDecoration('windmill') ? 0.88 : 1;
   }
 
   function getEggRushCost() {
@@ -497,13 +525,15 @@ import { getRefs } from './dom.js';
   function getEggCoinReward() {
     const weatherBonus = WEATHER_CONFIG[state.weather] ? WEATHER_CONFIG[state.weather].eggBonus : 0;
     const rushBonus = isEggRushRunning() ? EGG_RUSH_COIN_BONUS : 0;
-    return 3 + state.upgrades.eggLevel * 2 + weatherBonus + rushBonus;
+    const decorBonus = getDecorationCoinBonus();
+    return 3 + state.upgrades.eggLevel * 2 + weatherBonus + rushBonus + decorBonus;
   }
 
   function getAutoEggInterval() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const reduced = weather.eggInterval - state.upgrades.eggLevel * 140;
-    const baseInterval = Math.max(1700, reduced);
+    let baseInterval = Math.max(1700, reduced);
+    baseInterval = Math.max(1300, Math.round(baseInterval * getWindmillIntervalFactor()));
     if (isEggRushRunning()) {
       return Math.max(900, Math.round(baseInterval * EGG_RUSH_INTERVAL_FACTOR));
     }
@@ -1126,6 +1156,108 @@ import { getRefs } from './dom.js';
     refs.buyEggUpgradeBtn.textContent = eggMax ? 'Đã max cấp' : `Nâng cấp (${eggCost} xu)`;
   }
 
+  function getDecorationStatusRef(id) {
+    if (id === 'lantern') {
+      return refs.decorLanternStatus;
+    }
+    if (id === 'windmill') {
+      return refs.decorWindmillStatus;
+    }
+    if (id === 'musicBox') {
+      return refs.decorMusicBoxStatus;
+    }
+    return null;
+  }
+
+  function getDecorationButtonRef(id) {
+    if (id === 'lantern') {
+      return refs.buyDecorLanternBtn;
+    }
+    if (id === 'windmill') {
+      return refs.buyDecorWindmillBtn;
+    }
+    if (id === 'musicBox') {
+      return refs.buyDecorMusicBoxBtn;
+    }
+    return null;
+  }
+
+  function renderDecorShop() {
+    if (!refs.decorSummary) {
+      return;
+    }
+
+    const unlocked = DECOR_ITEMS.filter((item) => hasDecoration(item.id)).length;
+    const perks = [];
+    const coinBonus = getDecorationCoinBonus();
+    const moodBonus = getDecorationMoodBonus();
+    if (coinBonus > 0) {
+      perks.push(`+${coinBonus} xu/hành động`);
+    }
+    if (hasDecoration('windmill')) {
+      perks.push('+12% tốc độ trứng');
+    }
+    if (moodBonus > 0) {
+      perks.push(`+${moodBonus}% mood thụ động`);
+    }
+
+    refs.decorSummary.textContent = perks.length > 0
+      ? `Kích hoạt ${unlocked}/${DECOR_ITEMS.length} công trình • ${perks.join(' • ')}.`
+      : `Kích hoạt ${unlocked}/${DECOR_ITEMS.length} công trình trang trí.`;
+
+    DECOR_ITEMS.forEach((item) => {
+      const statusRef = getDecorationStatusRef(item.id);
+      const buttonRef = getDecorationButtonRef(item.id);
+      if (!statusRef || !buttonRef) {
+        return;
+      }
+
+      const active = hasDecoration(item.id);
+      const canBuy = !active && state.coins >= item.cost;
+
+      statusRef.classList.toggle('active', active);
+      statusRef.classList.toggle('affordable', !active && canBuy);
+      statusRef.textContent = active
+        ? `Đã kích hoạt • ${item.effect}`
+        : canBuy
+          ? `Đủ xu mở khóa ngay (${item.cost} xu)`
+          : `Chi phí mở khóa: ${item.cost} xu`;
+
+      buttonRef.disabled = active || !canBuy;
+      buttonRef.classList.toggle('opacity-60', active || !canBuy);
+      buttonRef.classList.toggle('cursor-not-allowed', active || !canBuy);
+      buttonRef.textContent = active ? 'Đã mở khóa' : `Mở khóa (${item.cost} xu)`;
+    });
+  }
+
+  function buyDecoration(id) {
+    const item = DECOR_ITEMS.find((entry) => entry.id === id);
+    if (!item) {
+      return;
+    }
+
+    if (hasDecoration(item.id)) {
+      showToast('Công trình này đã mở khóa');
+      return;
+    }
+
+    if (!spendCoins(item.cost)) {
+      showToast('Không đủ xu để mở khóa công trình');
+      return;
+    }
+
+    state.decorations[item.id] = true;
+    saveState();
+
+    if (item.id === 'windmill') {
+      restartAutoEggTimer();
+    }
+
+    updateUI();
+    addLog(`Mở khóa công trình: ${item.label} (-${item.cost} xu).`);
+    showToast(`Đã mở khóa ${item.label}`);
+  }
+
   function renderWeather() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     refs.weatherLabel.textContent = weather.label;
@@ -1460,6 +1592,12 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const decorToBuy = DECOR_ITEMS.find((item) => !hasDecoration(item.id) && state.coins >= item.cost);
+    if (decorToBuy) {
+      refs.nextActionHint.textContent = `Gợi ý: đủ xu mở khóa ${decorToBuy.label}, buff sẽ có hiệu lực vĩnh viễn.`;
+      return;
+    }
+
     if (state.coins >= getFeedUpgradeCost() && state.upgrades.feedLevel < MAX_UPGRADE_LEVEL) {
       refs.nextActionHint.textContent = 'Gợi ý: đủ xu nâng cấp cho ăn, tăng tốc phát triển đàn gà.';
       return;
@@ -1634,6 +1772,20 @@ import { getRefs } from './dom.js';
       });
     }
 
+    const decorToBuy = DECOR_ITEMS.find((item) => !hasDecoration(item.id) && state.coins >= item.cost);
+    if (decorToBuy) {
+      const triggerRef = getDecorationButtonRef(decorToBuy.id);
+      if (triggerRef) {
+        actions.push({
+          id: `priority_decor_${decorToBuy.id}`,
+          title: `Đủ xu mở ${decorToBuy.label}`,
+          desc: `${decorToBuy.effect} (chi phí ${decorToBuy.cost} xu).`,
+          cta: 'Mở khóa',
+          triggerRef
+        });
+      }
+    }
+
     if (state.autoFeeder.level > 0 && !state.autoFeeder.enabled) {
       actions.push({
         id: 'priority_feeder',
@@ -1758,6 +1910,7 @@ import { getRefs } from './dom.js';
     applyTheme();
     renderAchievements(mood);
     renderEconomy();
+    renderDecorShop();
     renderWeather();
     renderEggEngine();
     renderQuest();
@@ -1776,7 +1929,8 @@ import { getRefs } from './dom.js';
 
   function cluck(n) {
     state.cluckCount += 1;
-    addCoins(1);
+    const coinGain = 1 + getDecorationCoinBonus();
+    addCoins(coinGain);
     saveState();
     updateUI();
     bounceChicken(n);
@@ -1787,7 +1941,7 @@ import { getRefs } from './dom.js';
       2: 'Gà B 2: Cục... tác... zzz...'
     };
 
-    showToast(`${lines[n] || 'Cục tác!'} (+1 xu)`);
+    showToast(`${lines[n] || 'Cục tác!'} (+${coinGain} xu)`);
   }
 
   window.cluck = cluck;
@@ -1910,7 +2064,7 @@ import { getRefs } from './dom.js';
 
   refs.feedBtn.addEventListener('click', () => {
     const feedPower = getFeedPower();
-    const coinGain = 2 + state.upgrades.feedLevel;
+    const coinGain = 2 + state.upgrades.feedLevel + getDecorationCoinBonus();
 
     state.feedCount += feedPower;
     addCoins(coinGain);
@@ -1968,6 +2122,18 @@ import { getRefs } from './dom.js';
     updateUI();
     addLog(`Kích hoạt Mưa Trứng (-${cost} xu) trong ${Math.round(EGG_RUSH_DURATION_MS / 1000)}s.`);
     showToast('Mưa Trứng bắt đầu! Trứng rơi nhanh hơn');
+  });
+
+  refs.buyDecorLanternBtn.addEventListener('click', () => {
+    buyDecoration('lantern');
+  });
+
+  refs.buyDecorWindmillBtn.addEventListener('click', () => {
+    buyDecoration('windmill');
+  });
+
+  refs.buyDecorMusicBoxBtn.addEventListener('click', () => {
+    buyDecoration('musicBox');
   });
 
   refs.startIncubatorBtn.addEventListener('click', () => {

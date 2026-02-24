@@ -15,6 +15,26 @@ export const EGG_RUSH_COST = 42;
 export const EGG_RUSH_DURATION_MS = 30000;
 export const EGG_RUSH_INTERVAL_FACTOR = 0.58;
 export const EGG_RUSH_COIN_BONUS = 2;
+export const DECOR_ITEMS = [
+  {
+    id: 'lantern',
+    label: 'Đèn lồng sân trại',
+    cost: 55,
+    effect: '+1 xu khi gọi gà, cho ăn và nhặt trứng.'
+  },
+  {
+    id: 'windmill',
+    label: 'Cối xay gió mini',
+    cost: 85,
+    effect: 'Tăng tốc trứng rơi thêm 12% mọi lúc.'
+  },
+  {
+    id: 'musicBox',
+    label: 'Hộp nhạc đồng quê',
+    cost: 70,
+    effect: 'Tăng mood thụ động +8%.'
+  }
+];
 export const PREMIUM_FEED_CRAFT_EGGS = 3;
 export const PREMIUM_FEED_FEED_BONUS = 8;
 export const PREMIUM_FEED_COIN_BONUS = 6;
@@ -117,6 +137,11 @@ export const DEFAULT_STATE = {
     startedAt: 0,
     durationMs: 0,
     used: 0
+  },
+  decorations: {
+    lantern: false,
+    windmill: false,
+    musicBox: false
   },
   dailyGift: {
     lastClaimDate: '',

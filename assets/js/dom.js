@@ -46,6 +46,13 @@ export function getRefs() {
 
     coinBalance: document.getElementById('coinBalance'),
     eggStockBalance: document.getElementById('eggStockBalance'),
+    decorSummary: document.getElementById('decorSummary'),
+    decorLanternStatus: document.getElementById('decorLanternStatus'),
+    decorWindmillStatus: document.getElementById('decorWindmillStatus'),
+    decorMusicBoxStatus: document.getElementById('decorMusicBoxStatus'),
+    buyDecorLanternBtn: document.getElementById('buyDecorLanternBtn'),
+    buyDecorWindmillBtn: document.getElementById('buyDecorWindmillBtn'),
+    buyDecorMusicBoxBtn: document.getElementById('buyDecorMusicBoxBtn'),
     feedUpgradeLevel: document.getElementById('feedUpgradeLevel'),
     eggUpgradeLevel: document.getElementById('eggUpgradeLevel'),
     buyFeedUpgradeBtn: document.getElementById('buyFeedUpgradeBtn'),
