@@ -5,6 +5,8 @@ import {
   INCUBATOR_COST,
   INCUBATOR_DURATION_MS,
   INCUBATOR_COIN_REWARD,
+  COIN_MACHINE_DURATION_MS,
+  COIN_MACHINE_BASE_COST,
   MARKET_ORDER_MIN_EGGS,
   MARKET_ORDER_MAX_EGGS,
   AUTO_FEEDER_MAX_LEVEL,
@@ -138,6 +140,38 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeCoinMachine(rawMachine) {
+    if (!rawMachine || typeof rawMachine !== 'object') {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        payout: 0
+      };
+    }
+
+    const active = Boolean(rawMachine.active);
+    const startedAt = toSafeNumber(rawMachine.startedAt);
+    const durationMs = clamp(toSafeNumber(rawMachine.durationMs), 0, 86400000);
+    const payout = toSafeNumber(rawMachine.payout);
+
+    if (!active || startedAt <= 0 || durationMs <= 0 || payout <= 0) {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        payout: 0
+      };
+    }
+
+    return {
+      active: true,
+      startedAt,
+      durationMs,
+      payout
+    };
+  }
+
   function normalizeIncubator(rawIncubator) {
     if (!rawIncubator || typeof rawIncubator !== 'object') {
       return {
@@ -194,6 +228,7 @@ import { getRefs } from './dom.js';
       },
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
       dailyGift: normalizeDailyGift(input.dailyGift),
+      coinMachine: normalizeCoinMachine(input.coinMachine),
       incubator: normalizeIncubator(input.incubator),
       marketOrder: normalizeMarketOrder(input.marketOrder),
       dailyQuest: normalizeQuest(input.dailyQuest),
@@ -605,6 +640,81 @@ import { getRefs } from './dom.js';
       : 'Bán tất cả';
   }
 
+  function getCoinMachineStartCost() {
+    return COIN_MACHINE_BASE_COST + Math.floor(state.upgrades.feedLevel * 1.5);
+  }
+
+  function getCoinMachinePayout(cost) {
+    const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
+    const weatherBonus = weather.moodFactor >= 1.05 ? 8 : weather.moodFactor < 1 ? 3 : 5;
+    const streakBonus = Math.min(12, state.streak);
+    const eggBonus = Math.floor(state.upgrades.eggLevel / 2);
+    return cost + 15 + weatherBonus + streakBonus + eggBonus;
+  }
+
+  function getCoinMachineProgress() {
+    if (!state.coinMachine.active) {
+      return {
+        active: false,
+        ready: false,
+        progress: 0,
+        remainingMs: 0
+      };
+    }
+
+    const durationMs = Math.max(1, state.coinMachine.durationMs || COIN_MACHINE_DURATION_MS);
+    const elapsedMs = Math.max(0, Date.now() - state.coinMachine.startedAt);
+    const remainingMs = Math.max(0, durationMs - elapsedMs);
+
+    return {
+      active: true,
+      ready: remainingMs <= 0,
+      progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+      remainingMs
+    };
+  }
+
+  function renderCoinMachine() {
+    if (!refs.coinMachineStatus || !refs.coinMachineProfit || !refs.coinMachineProgressBar || !refs.startCoinMachineBtn || !refs.claimCoinMachineBtn) {
+      return;
+    }
+
+    const progress = getCoinMachineProgress();
+    const cost = getCoinMachineStartCost();
+
+    refs.startCoinMachineBtn.disabled = progress.active || state.coins < cost;
+    refs.startCoinMachineBtn.classList.toggle('opacity-60', progress.active || state.coins < cost);
+    refs.startCoinMachineBtn.classList.toggle('cursor-not-allowed', progress.active || state.coins < cost);
+    refs.startCoinMachineBtn.textContent = `Bắt đầu mẻ ủ (-${cost} xu)`;
+
+    if (!progress.active) {
+      const expected = getCoinMachinePayout(cost);
+      refs.coinMachineStatus.textContent = 'Máy đang rảnh, có thể bắt đầu mẻ mới.';
+      refs.coinMachineProfit.textContent = `Dự kiến thu về: +${expected} xu sau khi ủ xong.`;
+      refs.coinMachineProgressBar.style.width = '0%';
+      refs.claimCoinMachineBtn.disabled = true;
+      refs.claimCoinMachineBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.claimCoinMachineBtn.textContent = 'Chưa có mẻ để thu';
+      return;
+    }
+
+    refs.coinMachineProfit.textContent = `Mẻ hiện tại dự kiến thu +${state.coinMachine.payout} xu.`;
+    refs.coinMachineProgressBar.style.width = `${progress.progress}%`;
+
+    if (progress.ready) {
+      refs.coinMachineStatus.textContent = 'Mẻ ủ đã hoàn tất, có thể thu xu.';
+      refs.claimCoinMachineBtn.disabled = false;
+      refs.claimCoinMachineBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+      refs.claimCoinMachineBtn.textContent = `Thu +${state.coinMachine.payout} xu`;
+      return;
+    }
+
+    refs.coinMachineStatus.textContent = `Máy đang chạy... còn khoảng ${Math.ceil(progress.remainingMs / 1000)} giây.`;
+    refs.claimCoinMachineBtn.disabled = true;
+    refs.claimCoinMachineBtn.classList.add('opacity-60', 'cursor-not-allowed');
+    refs.claimCoinMachineBtn.textContent = 'Đang ủ...';
+  }
+
   function sellEggStock(amount) {
     const request = toSafeNumber(amount);
     if (request <= 0 || state.eggStock <= 0) {
@@ -969,6 +1079,7 @@ import { getRefs } from './dom.js';
     renderQuest();
     renderMarketOrder();
     renderQuickSell();
+    renderCoinMachine();
     renderDailyGift();
     renderAutoFeeder();
     renderIncubator();
@@ -1177,6 +1288,57 @@ import { getRefs } from './dom.js';
     sellEggStock(state.eggStock);
   });
 
+  refs.startCoinMachineBtn.addEventListener('click', () => {
+    if (state.coinMachine.active) {
+      showToast('Máy ủ xu đang chạy, chưa thể bắt đầu mẻ mới');
+      return;
+    }
+
+    const cost = getCoinMachineStartCost();
+    if (!spendCoins(cost)) {
+      showToast('Không đủ xu để bắt đầu mẻ ủ');
+      return;
+    }
+
+    state.coinMachine = {
+      active: true,
+      startedAt: Date.now(),
+      durationMs: COIN_MACHINE_DURATION_MS,
+      payout: getCoinMachinePayout(cost)
+    };
+
+    saveState();
+    updateUI();
+    addLog(`Bắt đầu máy ủ xu (-${cost} xu), dự kiến thu +${state.coinMachine.payout} xu.`);
+    showToast('Máy ủ xu đã khởi động');
+  });
+
+  refs.claimCoinMachineBtn.addEventListener('click', () => {
+    const progress = getCoinMachineProgress();
+    if (!progress.active) {
+      showToast('Hiện chưa có mẻ ủ nào để thu');
+      return;
+    }
+
+    if (!progress.ready) {
+      showToast(`Máy chưa xong, còn khoảng ${Math.ceil(progress.remainingMs / 1000)} giây`);
+      return;
+    }
+
+    const payout = state.coinMachine.payout;
+    state.coinMachine = {
+      active: false,
+      startedAt: 0,
+      durationMs: 0,
+      payout: 0
+    };
+    addCoins(payout);
+    saveState();
+    updateUI();
+    addLog(`Thu mẻ ủ xu thành công (+${payout} xu).`);
+    showToast(`Máy ủ hoàn tất: +${payout} xu`);
+  });
+
   refs.claimGiftBtn.addEventListener('click', () => {
     const today = getTodayKey();
     if (state.dailyGift.lastClaimDate === today) {
@@ -1377,6 +1539,8 @@ import { getRefs } from './dom.js';
       refs.toggleAutoFeederBtn.click();
     } else if (key === 'g') {
       refs.claimGiftBtn.click();
+    } else if (key === 'r') {
+      refs.claimCoinMachineBtn.click();
     } else if (key === 'h') {
       refs.claimIncubatorBtn.click();
     }
@@ -1450,6 +1614,7 @@ import { getRefs } from './dom.js';
 
   incubatorTickTimer = window.setInterval(() => {
     renderIncubator();
+    renderCoinMachine();
   }, 1000);
 
   if (autoFeederTickTimer) {

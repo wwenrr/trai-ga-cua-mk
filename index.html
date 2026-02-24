@@ -287,6 +287,20 @@
             <p class="mt-3 text-base text-slate-700">Giá bán tăng khi thời tiết tốt và nâng cấp trứng cao.</p>
           </section>
 
+          <section class="rounded-2xl border-2 border-indigo-200 p-4 lg:col-span-1 lab-card">
+            <h4 class="text-2xl font-black text-indigo-700">Máy ủ xu</h4>
+            <p id="coinMachineStatus" class="mt-2 text-lg font-black">Máy đang rảnh, có thể bắt đầu mẻ mới.</p>
+            <p id="coinMachineProfit" class="mt-1 text-base text-slate-700"></p>
+            <div class="mt-2 w-full h-3 rounded-full bg-indigo-100 overflow-hidden">
+              <div id="coinMachineProgressBar" class="machine-bar h-full bg-indigo-500" style="width: 0%;"></div>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-3">
+              <button id="startCoinMachineBtn" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-lg">Bắt đầu mẻ ủ</button>
+              <button id="claimCoinMachineBtn" class="px-5 py-3 bg-indigo-800 hover:bg-indigo-900 text-white rounded-xl text-lg">Thu xu</button>
+            </div>
+            <p class="mt-3 text-base text-slate-700">Đầu tư xu trước, chờ máy xử lý rồi thu về số xu cao hơn.</p>
+          </section>
+
           <section class="rounded-2xl border-2 border-amber-200 p-4 lg:col-span-3 lab-card">
             <h4 class="text-2xl font-black text-amber-700">Lò ấp trứng</h4>
             <p id="incubatorStatus" class="mt-2 text-lg font-black">Chưa có trứng nào đang ấp.</p>
@@ -304,7 +318,7 @@
         <h4 class="text-2xl font-black text-slate-700 mt-8">Nhật ký hoạt động</h4>
         <ul id="actionLog" class="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1"></ul>
 
-        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, H nhận gà con từ lò ấp. Có dock thao tác nhanh ở cuối màn hình.</p>
+        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, R thu xu từ máy ủ, H nhận gà con từ lò ấp. Có dock thao tác nhanh ở cuối màn hình.</p>
       </div>
     </div>
   </section>

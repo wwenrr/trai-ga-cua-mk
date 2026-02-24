@@ -4,6 +4,8 @@ export const WEATHER_ROTATE_MS = 45000;
 export const INCUBATOR_COST = 12;
 export const INCUBATOR_DURATION_MS = 45000;
 export const INCUBATOR_COIN_REWARD = 18;
+export const COIN_MACHINE_DURATION_MS = 38000;
+export const COIN_MACHINE_BASE_COST = 35;
 export const MARKET_ORDER_MIN_EGGS = 4;
 export const MARKET_ORDER_MAX_EGGS = 12;
 export const AUTO_FEEDER_MAX_LEVEL = 6;
@@ -96,6 +98,12 @@ export const DEFAULT_STATE = {
   dailyGift: {
     lastClaimDate: '',
     totalClaimed: 0
+  },
+  coinMachine: {
+    active: false,
+    startedAt: 0,
+    durationMs: 0,
+    payout: 0
   },
   incubator: {
     active: false,

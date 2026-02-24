@@ -228,6 +228,10 @@ body.night-mode #stars {
   transition: width 0.25s ease;
 }
 
+.machine-bar {
+  transition: width 0.25s linear;
+}
+
 .incubator-bar {
   transition: width 0.35s linear;
 }
