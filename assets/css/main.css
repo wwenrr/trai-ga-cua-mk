@@ -720,6 +720,54 @@ button:disabled {
   accent-color: #15803d;
 }
 
+.quick-ops-card {
+  background: linear-gradient(180deg, rgba(236, 254, 255, 0.95) 0%, rgba(207, 250, 254, 0.86) 100%);
+}
+
+.quick-ops-track {
+  width: 100%;
+  height: 0.62rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(14, 116, 144, 0.2);
+}
+
+.quick-ops-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #06b6d4 0%, #0e7490 100%);
+  transition: width 0.2s ease;
+}
+
+.quick-ops-list {
+  display: grid;
+  gap: 0.46rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quick-ops-item {
+  border-radius: 0.75rem;
+  padding: 0.46rem 0.58rem;
+  border: 1px solid rgba(14, 116, 144, 0.2);
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.quick-ops-empty {
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px dashed rgba(100, 116, 139, 0.45);
+  background: rgba(241, 245, 249, 0.86);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+}
+
 .urgent-timer {
   animation: urgent-pulse 0.8s ease-in-out infinite alternate;
 }
@@ -1329,6 +1377,31 @@ body.night-mode #autoSellThresholdValue {
 
 body.night-mode .auto-sell-track {
   background: rgba(148, 163, 184, 0.24);
+}
+
+body.night-mode .quick-ops-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.82) 100%);
+  border-color: rgba(103, 232, 249, 0.34);
+}
+
+body.night-mode #quickOpsHint {
+  color: #cbd5e1;
+}
+
+body.night-mode .quick-ops-track {
+  background: rgba(148, 163, 184, 0.24);
+}
+
+body.night-mode .quick-ops-item {
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+body.night-mode .quick-ops-empty {
+  color: #cbd5e1;
+  background: rgba(30, 41, 59, 0.72);
+  border-color: rgba(148, 163, 184, 0.34);
 }
 
 body.night-mode .decor-item {

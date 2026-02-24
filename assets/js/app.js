@@ -2336,6 +2336,181 @@ import { getRefs } from './dom.js';
     updateUI();
   }
 
+  function getQuickOpsActions() {
+    const actions = [];
+    const today = getTodayKey();
+
+    const flashOrderProgress = getFlashOrderProgress();
+    if (flashOrderProgress.active && !flashOrderProgress.ready && state.eggStock >= state.flashOrder.target && refs.flashOrderActionBtn) {
+      actions.push({
+        id: 'quick_flash_order',
+        label: `Giao đơn gấp (${state.flashOrder.target} trứng, +${state.flashOrder.reward} xu)`,
+        triggerRef: refs.flashOrderActionBtn
+      });
+    }
+
+    const vipVisitProgress = getVipVisitProgress();
+    if (vipVisitProgress.active && !vipVisitProgress.ready && vipVisitProgress.done && refs.vipVisitActionBtn) {
+      actions.push({
+        id: 'quick_vip_visit',
+        label: `Khách VIP chờ nhận thưởng (+${state.vipVisit.rewardCoins} xu${state.vipVisit.rewardEggStock > 0 ? `, +${state.vipVisit.rewardEggStock} trứng` : ''})`,
+        triggerRef: refs.vipVisitActionBtn
+      });
+    }
+
+    const traderProgress = getMobileTraderProgress();
+    if (traderProgress.active && !traderProgress.ready && canAcceptMobileTraderDeal() && refs.mobileTraderActionBtn) {
+      actions.push({
+        id: 'quick_trader',
+        label: `Chốt deal thương nhân: ${getMobileTraderDealText()}`,
+        triggerRef: refs.mobileTraderActionBtn
+      });
+    }
+
+    const coinMachineProgress = getCoinMachineProgress();
+    if (coinMachineProgress.active && coinMachineProgress.ready && refs.claimCoinMachineBtn) {
+      actions.push({
+        id: 'quick_coin_machine',
+        label: `Thu xu từ máy ủ (+${state.coinMachine.payout} xu)`,
+        triggerRef: refs.claimCoinMachineBtn
+      });
+    }
+
+    const incubatorProgress = getIncubatorProgress();
+    if (incubatorProgress.active && incubatorProgress.ready && refs.claimIncubatorBtn) {
+      actions.push({
+        id: 'quick_incubator',
+        label: `Nhận gà con từ lò ấp (+${INCUBATOR_COIN_REWARD} xu)`,
+        triggerRef: refs.claimIncubatorBtn
+      });
+    }
+
+    const { quest, done } = getQuestProgress();
+    if (!quest.claimed && done && refs.claimQuestBtn) {
+      actions.push({
+        id: 'quick_quest',
+        label: `Nhận thưởng nhiệm vụ ngày (+${quest.reward} xu)`,
+        triggerRef: refs.claimQuestBtn
+      });
+    }
+
+    ensureMarketOrder();
+    const order = state.marketOrder;
+    if (order && !order.claimed && state.eggStock >= order.target && refs.claimOrderBtn) {
+      actions.push({
+        id: 'quick_market_order',
+        label: `Giao đơn thương lái (${order.target} trứng, +${order.reward} xu)`,
+        triggerRef: refs.claimOrderBtn
+      });
+    }
+
+    if (state.dailyGift.lastClaimDate !== today && refs.claimGiftBtn) {
+      const reward = getDailyGiftReward();
+      actions.push({
+        id: 'quick_daily_gift',
+        label: `Nhận quà điểm danh (+${reward.coins} xu${reward.eggStock > 0 ? `, +${reward.eggStock} trứng` : ''})`,
+        triggerRef: refs.claimGiftBtn
+      });
+    }
+
+    if (state.luckySpin.lastSpinDate !== today && refs.luckySpinBtn) {
+      actions.push({
+        id: 'quick_lucky_spin',
+        label: 'Quay may mắn miễn phí hôm nay',
+        triggerRef: refs.luckySpinBtn
+      });
+    }
+
+    const wholesaleProgress = getWholesaleProgress();
+    if (!wholesaleProgress.active && state.eggStock >= WHOLESALE_EGG_BATCH && refs.startWholesaleBtn) {
+      actions.push({
+        id: 'quick_wholesale',
+        label: `Bán hợp đồng sỉ ${WHOLESALE_EGG_BATCH} trứng (+${getWholesalePayout()} xu)`,
+        triggerRef: refs.startWholesaleBtn
+      });
+    }
+
+    return actions;
+  }
+
+  function renderQuickOpsPanel() {
+    if (!refs.quickOpsStatus || !refs.quickOpsHint || !refs.quickOpsList || !refs.quickOpsProgressBar || !refs.runQuickOpsBtn) {
+      return;
+    }
+
+    const actions = getQuickOpsActions();
+    const trackedTotal = 10;
+    const progress = trackedTotal > 0
+      ? clamp(Math.round((actions.length / trackedTotal) * 100), 0, 100)
+      : 0;
+
+    refs.quickOpsProgressBar.style.width = `${progress}%`;
+    refs.quickOpsList.innerHTML = '';
+
+    if (actions.length <= 0) {
+      refs.quickOpsStatus.textContent = 'Hiện chưa có tác vụ nào cần xử lý nhanh.';
+      refs.quickOpsHint.textContent = 'Khi có thưởng/tác vụ sẵn sàng, hệ thống sẽ tự đưa vào bảng này.';
+      refs.runQuickOpsBtn.disabled = true;
+      refs.runQuickOpsBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.runQuickOpsBtn.textContent = 'Chạy thao tác nhanh';
+
+      const empty = document.createElement('li');
+      empty.className = 'quick-ops-empty';
+      empty.textContent = 'Danh sách đang trống. Tiếp tục nuôi đàn để mở thêm tác vụ.';
+      refs.quickOpsList.appendChild(empty);
+      return;
+    }
+
+    refs.quickOpsStatus.textContent = actions.length === 1
+      ? 'Có 1 tác vụ sẵn sàng xử lý.'
+      : `Có ${actions.length} tác vụ sẵn sàng xử lý.`;
+    refs.quickOpsHint.textContent = 'Bấm Chạy thao tác nhanh hoặc dùng phím C để xử lý tuần tự.';
+    refs.runQuickOpsBtn.disabled = false;
+    refs.runQuickOpsBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+    refs.runQuickOpsBtn.textContent = `Chạy thao tác nhanh (${actions.length})`;
+
+    actions.slice(0, 4).forEach((action, idx) => {
+      const li = document.createElement('li');
+      li.className = 'quick-ops-item';
+      li.textContent = `${idx + 1}. ${action.label}`;
+      refs.quickOpsList.appendChild(li);
+    });
+  }
+
+  function runQuickOpsBatch() {
+    let executed = 0;
+    let previousActionId = '';
+
+    for (let i = 0; i < 12; i += 1) {
+      const actions = getQuickOpsActions();
+      if (actions.length <= 0) {
+        break;
+      }
+
+      const action = actions[0];
+      if (!action.triggerRef || action.triggerRef.disabled) {
+        break;
+      }
+
+      if (action.id === previousActionId) {
+        break;
+      }
+
+      previousActionId = action.id;
+      action.triggerRef.click();
+      executed += 1;
+    }
+
+    if (executed <= 0) {
+      showToast('Không có tác vụ nào sẵn sàng để chạy nhanh');
+      return;
+    }
+
+    addLog(`Trung tâm thao tác nhanh đã xử lý ${executed} tác vụ.`);
+    showToast(`Đã chạy nhanh ${executed} tác vụ`);
+    updateUI();
+  }
+
   function renderEconomy() {
     refs.coinBalance.textContent = String(state.coins);
     refs.eggStockBalance.textContent = String(state.eggStock);
@@ -2930,6 +3105,12 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const quickOpsActions = getQuickOpsActions();
+    if (quickOpsActions.length >= 3) {
+      refs.nextActionHint.textContent = `Gợi ý: có ${quickOpsActions.length} tác vụ sẵn sàng, dùng Trung tâm thao tác nhanh (phím C) để xử lý gọn một lần.`;
+      return;
+    }
+
     ensureMarketOrder();
     const order = state.marketOrder;
     if (order && !order.claimed && state.eggStock >= order.target) {
@@ -3137,6 +3318,17 @@ import { getRefs } from './dom.js';
         desc: `Nhận +${reward.coins} xu${reward.eggStock > 0 ? `, +${reward.eggStock} trứng` : ''}.`,
         cta: 'Nhận quà',
         triggerRef: refs.claimGiftBtn
+      });
+    }
+
+    const quickOpsActions = getQuickOpsActions();
+    if (quickOpsActions.length >= 3 && refs.runQuickOpsBtn) {
+      actions.push({
+        id: 'priority_quick_ops',
+        title: 'Nhiều tác vụ có thể xử lý tức thì',
+        desc: `Trung tâm thao tác nhanh đang gom ${quickOpsActions.length} tác vụ để chạy trong một lần bấm.`,
+        cta: 'Chạy nhanh',
+        triggerRef: refs.runQuickOpsBtn
       });
     }
 
@@ -3479,6 +3671,7 @@ import { getRefs } from './dom.js';
     renderPremiumFeed();
     renderAutoFeeder();
     renderAutoSellerPanel();
+    renderQuickOpsPanel();
     renderIncubator();
     renderPriorityBoard();
     renderReadyActions();
@@ -4274,6 +4467,12 @@ import { getRefs } from './dom.js';
     });
   }
 
+  if (refs.runQuickOpsBtn) {
+    refs.runQuickOpsBtn.addEventListener('click', () => {
+      runQuickOpsBatch();
+    });
+  }
+
   refs.claimQuestBtn.addEventListener('click', () => {
     const { quest, done } = getQuestProgress();
 
@@ -4368,6 +4567,14 @@ import { getRefs } from './dom.js';
     refs.spawnEggBtn.click();
   });
 
+  if (refs.dockQuickOpsBtn) {
+    refs.dockQuickOpsBtn.addEventListener('click', () => {
+      if (refs.runQuickOpsBtn) {
+        refs.runQuickOpsBtn.click();
+      }
+    });
+  }
+
   refs.dockLabBtn.addEventListener('click', () => {
     const lab = document.getElementById('farm-lab');
     if (!lab) {
@@ -4407,6 +4614,10 @@ import { getRefs } from './dom.js';
       refs.mobileTraderActionBtn.click();
     } else if (key === 's') {
       refs.toggleAutoSellBtn.click();
+    } else if (key === 'c') {
+      if (refs.runQuickOpsBtn) {
+        refs.runQuickOpsBtn.click();
+      }
     } else if (key === 'y') {
       refs.activateWeatherShieldBtn.click();
     } else if (key === 't') {
