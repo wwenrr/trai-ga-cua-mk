@@ -65,6 +65,11 @@ export const WHOLESALE_EGG_BATCH = 10;
 export const WHOLESALE_COOLDOWN_MS = 25000;
 export const WHOLESALE_BASE_BONUS = 10;
 export const WHOLESALE_FEVER_BONUS = 12;
+export const WEATHER_SHIELD_COST = 34;
+export const WEATHER_SHIELD_DURATION_MS = 36000;
+export const WEATHER_SHIELD_MIN_MOOD_FACTOR = 1;
+export const WEATHER_SHIELD_MAX_INTERVAL_MS = 4300;
+export const WEATHER_SHIELD_COIN_BONUS = 1;
 export const PREMIUM_FEED_CRAFT_EGGS = 3;
 export const PREMIUM_FEED_FEED_BONUS = 8;
 export const PREMIUM_FEED_COIN_BONUS = 6;
@@ -189,6 +194,12 @@ export const DEFAULT_STATE = {
     lastTradeAt: 0,
     totalTrades: 0,
     totalEggs: 0
+  },
+  weatherShield: {
+    active: false,
+    startedAt: 0,
+    durationMs: 0,
+    used: 0
   },
   dailyGift: {
     lastClaimDate: '',

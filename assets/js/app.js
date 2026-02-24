@@ -28,6 +28,11 @@ import {
   WHOLESALE_COOLDOWN_MS,
   WHOLESALE_BASE_BONUS,
   WHOLESALE_FEVER_BONUS,
+  WEATHER_SHIELD_COST,
+  WEATHER_SHIELD_DURATION_MS,
+  WEATHER_SHIELD_MIN_MOOD_FACTOR,
+  WEATHER_SHIELD_MAX_INTERVAL_MS,
+  WEATHER_SHIELD_COIN_BONUS,
   PREMIUM_FEED_CRAFT_EGGS,
   PREMIUM_FEED_FEED_BONUS,
   PREMIUM_FEED_COIN_BONUS,
@@ -267,6 +272,38 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeWeatherShield(rawShield) {
+    if (!rawShield || typeof rawShield !== 'object') {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        used: 0
+      };
+    }
+
+    const active = Boolean(rawShield.active);
+    const startedAt = toSafeNumber(rawShield.startedAt);
+    const durationMs = clamp(toSafeNumber(rawShield.durationMs), 0, 86400000);
+    const used = toSafeNumber(rawShield.used);
+
+    if (!active || startedAt <= 0 || durationMs <= 0) {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        used
+      };
+    }
+
+    return {
+      active: true,
+      startedAt,
+      durationMs,
+      used
+    };
+  }
+
   function normalizeDailyGift(rawGift) {
     if (!rawGift || typeof rawGift !== 'object') {
       return {
@@ -406,6 +443,7 @@ import { getRefs } from './dom.js';
       combo: normalizeCombo(input.combo),
       fever: normalizeFever(input.fever),
       wholesale: normalizeWholesale(input.wholesale),
+      weatherShield: normalizeWeatherShield(input.weatherShield),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
       premiumFeed: normalizePremiumFeed(input.premiumFeed),
@@ -503,13 +541,85 @@ import { getRefs } from './dom.js';
     }, 260);
   }
 
+  function getWeatherShieldCost() {
+    return WEATHER_SHIELD_COST;
+  }
+
+  function isWeatherShieldActive() {
+    if (!state.weatherShield || !state.weatherShield.active) {
+      return false;
+    }
+
+    const duration = Math.max(1, state.weatherShield.durationMs || WEATHER_SHIELD_DURATION_MS);
+    return Date.now() - state.weatherShield.startedAt < duration;
+  }
+
+  function getWeatherShieldProgress() {
+    if (!state.weatherShield || !state.weatherShield.active) {
+      return {
+        active: false,
+        ready: false,
+        progress: 0,
+        remainingMs: 0
+      };
+    }
+
+    const durationMs = Math.max(1, state.weatherShield.durationMs || WEATHER_SHIELD_DURATION_MS);
+    const elapsedMs = Math.max(0, Date.now() - state.weatherShield.startedAt);
+    const remainingMs = Math.max(0, durationMs - elapsedMs);
+
+    return {
+      active: true,
+      ready: remainingMs <= 0,
+      progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+      remainingMs
+    };
+  }
+
+  function stopWeatherShield(completed = false) {
+    if (!state.weatherShield || !state.weatherShield.active) {
+      return false;
+    }
+
+    state.weatherShield.active = false;
+    state.weatherShield.startedAt = 0;
+    state.weatherShield.durationMs = 0;
+    saveState();
+    restartAutoEggTimer();
+
+    if (completed) {
+      addLog('Khiên thời tiết đã hết hiệu lực.');
+      showToast('Khiên thời tiết đã kết thúc');
+    }
+
+    return true;
+  }
+
+  function getEffectiveWeatherMoodFactor(weather) {
+    if (!isWeatherShieldActive()) {
+      return weather.moodFactor;
+    }
+    return Math.max(WEATHER_SHIELD_MIN_MOOD_FACTOR, weather.moodFactor);
+  }
+
+  function getEffectiveWeatherEggInterval(weather) {
+    if (!isWeatherShieldActive()) {
+      return weather.eggInterval;
+    }
+    return Math.min(WEATHER_SHIELD_MAX_INTERVAL_MS, weather.eggInterval);
+  }
+
+  function getWeatherShieldCoinBonus() {
+    return isWeatherShieldActive() ? WEATHER_SHIELD_COIN_BONUS : 0;
+  }
+
   function getMood() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const base = state.cluckCount * 3
       + state.feedCount * (6 + state.upgrades.feedLevel)
       + state.eggCount * 5
       + state.hatchCount * 8;
-    const decorated = Math.round(base * weather.moodFactor) + getDecorationMoodBonus();
+    const decorated = Math.round(base * getEffectiveWeatherMoodFactor(weather)) + getDecorationMoodBonus();
     return Math.min(100, decorated);
   }
 
@@ -754,12 +864,13 @@ import { getRefs } from './dom.js';
     const rushBonus = isEggRushRunning() ? EGG_RUSH_COIN_BONUS : 0;
     const decorBonus = getDecorationCoinBonus();
     const feverBonus = getFeverCoinBonus();
-    return 3 + state.upgrades.eggLevel * 2 + weatherBonus + rushBonus + decorBonus + feverBonus;
+    const shieldBonus = getWeatherShieldCoinBonus();
+    return 3 + state.upgrades.eggLevel * 2 + weatherBonus + rushBonus + decorBonus + feverBonus + shieldBonus;
   }
 
   function getAutoEggInterval() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
-    const reduced = weather.eggInterval - state.upgrades.eggLevel * 140;
+    const reduced = getEffectiveWeatherEggInterval(weather) - state.upgrades.eggLevel * 140;
     let baseInterval = Math.max(1700, reduced);
     baseInterval = Math.max(1300, Math.round(baseInterval * getWindmillIntervalFactor()));
     if (isEggRushRunning()) {
@@ -1001,7 +1112,8 @@ import { getRefs } from './dom.js';
     const weatherBonus = weather.eggBonus + (state.weather === 'festival' ? 1 : 0);
     const upgradeBonus = Math.floor(state.upgrades.eggLevel / 2);
     const streakBonus = Math.min(3, Math.floor(state.streak / 3));
-    return Math.max(3, 4 + weatherBonus + upgradeBonus + streakBonus);
+    const shieldBonus = getWeatherShieldCoinBonus();
+    return Math.max(3, 4 + weatherBonus + upgradeBonus + streakBonus + shieldBonus);
   }
 
   function getWholesaleProgress() {
@@ -1269,7 +1381,7 @@ import { getRefs } from './dom.js';
     const packs = state.premiumFeed.packs;
     const craftCost = getPremiumFeedCraftCost();
     const feedBonus = getPremiumFeedFeedBonus();
-    const coinBonus = getPremiumFeedCoinBonus() + getFeverCoinBonus();
+    const coinBonus = getPremiumFeedCoinBonus() + getFeverCoinBonus() + getWeatherShieldCoinBonus();
 
     refs.premiumFeedPacks.textContent = `Bao cám hiện có: ${packs}`;
     refs.premiumFeedStats.textContent = `Đã chế biến ${state.premiumFeed.crafted} bao, đã dùng ${state.premiumFeed.used} lần.`;
@@ -1557,7 +1669,10 @@ import { getRefs } from './dom.js';
     refs.weatherLabel.textContent = weather.label;
 
     const intervalSec = (getAutoEggInterval() / 1000).toFixed(1);
-    refs.weatherEffect.textContent = `${weather.effect} Tốc độ trứng: ${intervalSec}s/quả.`;
+    const shieldText = isWeatherShieldActive()
+      ? ` Khiên đang bật: chặn thời tiết xấu, +${WEATHER_SHIELD_COIN_BONUS} xu/hành động.`
+      : '';
+    refs.weatherEffect.textContent = `${weather.effect} Tốc độ trứng: ${intervalSec}s/quả.${shieldText}`;
   }
 
   function renderEggEngine() {
@@ -1607,6 +1722,51 @@ import { getRefs } from './dom.js';
     }
 
     renderEggEngine();
+  }
+
+  function renderWeatherShieldPanel() {
+    if (!refs.weatherShieldStatus || !refs.weatherShieldHint || !refs.weatherShieldProgressBar || !refs.activateWeatherShieldBtn) {
+      return;
+    }
+
+    const progress = getWeatherShieldProgress();
+    const cost = getWeatherShieldCost();
+    const canActivate = !progress.active && state.coins >= cost;
+
+    refs.activateWeatherShieldBtn.disabled = progress.active || !canActivate;
+    refs.activateWeatherShieldBtn.classList.toggle('opacity-60', progress.active || !canActivate);
+    refs.activateWeatherShieldBtn.classList.toggle('cursor-not-allowed', progress.active || !canActivate);
+
+    if (!progress.active) {
+      refs.activateWeatherShieldBtn.textContent = `Bật Khiên (-${cost} xu)`;
+      refs.weatherShieldStatus.textContent = canActivate
+        ? 'Khiên sẵn sàng kích hoạt để bảo vệ đàn gà.'
+        : 'Chưa đủ xu để bật Khiên thời tiết.';
+      refs.weatherShieldHint.textContent = `Hiệu lực ${Math.round(WEATHER_SHIELD_DURATION_MS / 1000)}s • mood không bị giảm dưới 100% do thời tiết • +${WEATHER_SHIELD_COIN_BONUS} xu/hành động.`;
+      refs.weatherShieldProgressBar.style.width = '0%';
+      return;
+    }
+
+    refs.activateWeatherShieldBtn.textContent = 'Khiên đang hoạt động';
+    refs.weatherShieldStatus.textContent = `Khiên còn ${Math.ceil(progress.remainingMs / 1000)}s.`;
+    refs.weatherShieldHint.textContent = `Tốc độ trứng bị thời tiết xấu sẽ không chậm hơn ${(WEATHER_SHIELD_MAX_INTERVAL_MS / 1000).toFixed(1)}s/quả.`;
+    refs.weatherShieldProgressBar.style.width = `${progress.progress}%`;
+  }
+
+  function runWeatherShieldTick() {
+    const progress = getWeatherShieldProgress();
+    if (!progress.active) {
+      return;
+    }
+
+    if (progress.ready) {
+      stopWeatherShield(true);
+      updateUI();
+      return;
+    }
+
+    renderWeatherShieldPanel();
+    renderWeather();
   }
 
   function renderFeverPanel() {
@@ -1992,6 +2152,13 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
+    const shieldCost = getWeatherShieldCost();
+    if (!isWeatherShieldActive() && weather.moodFactor < WEATHER_SHIELD_MIN_MOOD_FACTOR && state.coins >= shieldCost) {
+      refs.nextActionHint.textContent = 'Gợi ý: thời tiết đang xấu, bật Khiên thời tiết để giữ hiệu suất ổn định.';
+      return;
+    }
+
     if (!isEggRushRunning() && state.coins >= getEggRushCost()) {
       refs.nextActionHint.textContent = 'Gợi ý: kích hoạt Mưa Trứng để farm xu và trứng nhanh trong ngắn hạn.';
       return;
@@ -2199,6 +2366,18 @@ import { getRefs } from './dom.js';
       });
     }
 
+    const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
+    const shieldCost = getWeatherShieldCost();
+    if (!isWeatherShieldActive() && weather.moodFactor < WEATHER_SHIELD_MIN_MOOD_FACTOR && state.coins >= shieldCost) {
+      actions.push({
+        id: 'priority_weather_shield',
+        title: 'Thời tiết đang làm giảm mood',
+        desc: `Bật Khiên thời tiết (${shieldCost} xu) để chặn ảnh hưởng xấu.`,
+        cta: 'Bật khiên',
+        triggerRef: refs.activateWeatherShieldBtn
+      });
+    }
+
     if (!isEggRushRunning() && state.coins >= getEggRushCost()) {
       actions.push({
         id: 'priority_egg_rush',
@@ -2374,6 +2553,7 @@ import { getRefs } from './dom.js';
     renderEconomy();
     renderDecorShop();
     renderWeather();
+    renderWeatherShieldPanel();
     renderEggEngine();
     renderFeverPanel();
     renderComboPanel();
@@ -2394,7 +2574,7 @@ import { getRefs } from './dom.js';
 
   function cluck(n) {
     state.cluckCount += 1;
-    const coinGain = 1 + getDecorationCoinBonus() + getFeverCoinBonus();
+    const coinGain = 1 + getDecorationCoinBonus() + getFeverCoinBonus() + getWeatherShieldCoinBonus();
     const combo = registerComboAction('Gọi gà');
     addCoins(coinGain);
     saveState();
@@ -2530,7 +2710,7 @@ import { getRefs } from './dom.js';
 
   refs.feedBtn.addEventListener('click', () => {
     const feedPower = getFeedPower();
-    const coinGain = 2 + state.upgrades.feedLevel + getDecorationCoinBonus() + getFeverCoinBonus();
+    const coinGain = 2 + state.upgrades.feedLevel + getDecorationCoinBonus() + getFeverCoinBonus() + getWeatherShieldCoinBonus();
     const combo = registerComboAction('Cho ăn');
 
     state.feedCount += feedPower;
@@ -2868,7 +3048,7 @@ import { getRefs } from './dom.js';
 
     const combo = registerComboAction('Dùng cám premium');
     const feedBonus = getPremiumFeedFeedBonus();
-    const coinBonus = getPremiumFeedCoinBonus() + getFeverCoinBonus();
+    const coinBonus = getPremiumFeedCoinBonus() + getFeverCoinBonus() + getWeatherShieldCoinBonus();
 
     state.premiumFeed.packs -= 1;
     state.premiumFeed.used += 1;
@@ -2988,6 +3168,30 @@ import { getRefs } from './dom.js';
     randomizeWeather(false);
   });
 
+  refs.activateWeatherShieldBtn.addEventListener('click', () => {
+    const progress = getWeatherShieldProgress();
+    if (progress.active && !progress.ready) {
+      showToast('Khiên thời tiết đang hoạt động');
+      return;
+    }
+
+    const cost = getWeatherShieldCost();
+    if (!spendCoins(cost)) {
+      showToast('Không đủ xu để bật Khiên thời tiết');
+      return;
+    }
+
+    state.weatherShield.active = true;
+    state.weatherShield.startedAt = Date.now();
+    state.weatherShield.durationMs = WEATHER_SHIELD_DURATION_MS;
+    state.weatherShield.used += 1;
+    saveState();
+    restartAutoEggTimer();
+    updateUI();
+    addLog(`Bật Khiên thời tiết (-${cost} xu) trong ${Math.round(WEATHER_SHIELD_DURATION_MS / 1000)}s.`);
+    showToast('Khiên thời tiết đã kích hoạt');
+  });
+
   refs.resetBtn.addEventListener('click', () => {
     const keep = {
       visitorName: state.visitorName,
@@ -3058,6 +3262,8 @@ import { getRefs } from './dom.js';
       refs.startFeverBtn.click();
     } else if (key === 'k') {
       refs.startWholesaleBtn.click();
+    } else if (key === 'y') {
+      refs.activateWeatherShieldBtn.click();
     } else if (key === 't') {
       refs.themeToggleBtn.click();
     } else if (key === 'w') {
@@ -3160,6 +3366,7 @@ import { getRefs } from './dom.js';
     renderCoinMachine();
     renderWholesalePanel();
     runEggRushTick();
+    runWeatherShieldTick();
     runFeverTick();
     runComboTick();
   }, 1000);
@@ -3173,6 +3380,7 @@ import { getRefs } from './dom.js';
     renderAutoFeeder();
   }, 1000);
 
+  runWeatherShieldTick();
   runFeverTick();
   runComboTick();
   updateUI();

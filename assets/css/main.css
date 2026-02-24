@@ -450,6 +450,41 @@ button:disabled {
   transition: width 0.28s linear;
 }
 
+.weather-shield-panel {
+  border-radius: 0.85rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(14, 116, 144, 0.26);
+  background: linear-gradient(180deg, rgba(224, 242, 254, 0.9) 0%, rgba(186, 230, 253, 0.72) 100%);
+}
+
+.weather-shield-status {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0c4a6e;
+}
+
+.weather-shield-hint {
+  font-size: 0.76rem;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.weather-shield-track {
+  width: 100%;
+  height: 0.58rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(2, 132, 199, 0.18);
+}
+
+.weather-shield-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0ea5e9 0%, #0284c7 100%);
+  transition: width 0.2s linear;
+}
+
 .combo-panel {
   border-radius: 0.95rem;
   border: 1px solid rgba(14, 116, 144, 0.24);
@@ -1070,6 +1105,23 @@ body.night-mode .egg-rush-track {
 body.night-mode .combo-panel {
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.84) 100%);
   border-color: rgba(148, 163, 184, 0.34);
+}
+
+body.night-mode .weather-shield-panel {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(30, 41, 59, 0.8) 100%);
+  border-color: rgba(125, 211, 252, 0.32);
+}
+
+body.night-mode .weather-shield-status {
+  color: #7dd3fc;
+}
+
+body.night-mode .weather-shield-hint {
+  color: #cbd5e1;
+}
+
+body.night-mode .weather-shield-track {
+  background: rgba(148, 163, 184, 0.24);
 }
 
 body.night-mode .combo-title {
