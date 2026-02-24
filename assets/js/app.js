@@ -34,6 +34,8 @@ import { getRefs } from './dom.js';
   let autoFeederTickTimer;
   let audioCtx;
   const state = loadState();
+  const statPulseTimers = new WeakMap();
+  const statTextCache = new Map();
 
   function toSafeNumber(value) {
     const n = Number(value);
@@ -1188,6 +1190,41 @@ import { getRefs } from './dom.js';
     saveState();
   }
 
+  function setStatText(ref, key, text) {
+    if (!ref) {
+      return;
+    }
+
+    ref.textContent = text;
+    const previousText = statTextCache.get(key);
+    if (previousText === undefined || previousText === text) {
+      statTextCache.set(key, text);
+      return;
+    }
+
+    const card = ref.closest('.stat-card');
+    if (!card) {
+      statTextCache.set(key, text);
+      return;
+    }
+
+    card.classList.remove('stat-updated');
+    void card.offsetWidth;
+    card.classList.add('stat-updated');
+
+    const prevTimer = statPulseTimers.get(card);
+    if (prevTimer) {
+      clearTimeout(prevTimer);
+    }
+
+    const timer = setTimeout(() => {
+      card.classList.remove('stat-updated');
+      statPulseTimers.delete(card);
+    }, 420);
+    statPulseTimers.set(card, timer);
+    statTextCache.set(key, text);
+  }
+
   function updateUI() {
     const mood = getMood();
     if (mood > state.bestMood) {
@@ -1197,16 +1234,16 @@ import { getRefs } from './dom.js';
 
     grantAchievementRewards(mood);
 
-    refs.cluckCount.textContent = String(state.cluckCount);
-    refs.feedCount.textContent = String(state.feedCount);
-    refs.eggCount.textContent = String(state.eggCount);
-    refs.eggStock.textContent = String(state.eggStock);
-    refs.soldEggCount.textContent = String(state.soldEggCount);
-    refs.hatchCount.textContent = String(state.hatchCount);
-    refs.coinCount.textContent = String(state.coins);
-    refs.streakCount.textContent = String(state.streak);
-    refs.moodCount.textContent = `${mood}%`;
-    refs.bestMood.textContent = `${state.bestMood}%`;
+    setStatText(refs.cluckCount, 'cluckCount', String(state.cluckCount));
+    setStatText(refs.feedCount, 'feedCount', String(state.feedCount));
+    setStatText(refs.eggCount, 'eggCount', String(state.eggCount));
+    setStatText(refs.eggStock, 'eggStock', String(state.eggStock));
+    setStatText(refs.soldEggCount, 'soldEggCount', String(state.soldEggCount));
+    setStatText(refs.hatchCount, 'hatchCount', String(state.hatchCount));
+    setStatText(refs.coinCount, 'coinCount', String(state.coins));
+    setStatText(refs.streakCount, 'streakCount', String(state.streak));
+    setStatText(refs.moodCount, 'moodCount', `${mood}%`);
+    setStatText(refs.bestMood, 'bestMood', `${state.bestMood}%`);
 
     refs.visitorName.value = state.visitorName;
     refs.welcomeMessage.textContent = state.visitorName
@@ -1768,7 +1805,13 @@ import { getRefs } from './dom.js';
   function setActiveNav(id) {
     navLinks.forEach((link) => {
       const target = link.getAttribute('href');
-      link.classList.toggle('active', target === `#${id}`);
+      const isActive = target === `#${id}`;
+      link.classList.toggle('active', isActive);
+      if (isActive) {
+        link.setAttribute('aria-current', 'page');
+      } else {
+        link.removeAttribute('aria-current');
+      }
     });
   }
 

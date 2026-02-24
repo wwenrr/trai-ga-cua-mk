@@ -7,26 +7,31 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/main.css">
 </head>
-<body class="bg-gradient-to-b from-sky-300 via-cyan-200 to-lime-200 min-h-screen overflow-x-hidden">
+<body class="min-h-screen overflow-x-hidden">
+  <a href="#mainContent" class="skip-link">Bỏ qua điều hướng</a>
 
   <!-- NAV -->
-  <nav class="sticky top-0 z-50 bg-white/85 backdrop-blur shadow py-4">
+  <nav class="farm-nav sticky top-0 z-50 py-4" aria-label="Điều hướng chính">
     <div class="max-w-6xl mx-auto px-6 flex flex-wrap gap-4 justify-between items-center">
-      <h1 class="text-2xl md:text-3xl font-bold text-amber-600">🐔 Trang Trại Gà B</h1>
+      <div>
+        <p class="brand-kicker">Nông trại tương tác</p>
+        <h1 class="brand-title">🐔 Trang Trại Gà B</h1>
+      </div>
       <div class="flex flex-wrap gap-5 md:gap-8 text-base md:text-lg">
-        <a href="#home" class="nav-link hover:text-amber-500 transition">Trang chủ</a>
-        <a href="#chickens" class="nav-link hover:text-amber-500 transition">Gặp gà B</a>
-        <a href="#farm-lab" class="nav-link hover:text-amber-500 transition">Phòng điều khiển</a>
+        <a href="#home" class="nav-link">Trang chủ</a>
+        <a href="#chickens" class="nav-link">Gặp gà B</a>
+        <a href="#farm-lab" class="nav-link">Phòng điều khiển</a>
       </div>
     </div>
   </nav>
 
+  <main id="mainContent">
   <!-- HERO + SVG -->
-  <section id="home" class="relative min-h-screen flex items-center justify-center px-4">
+  <section id="home" class="relative min-h-[92vh] flex items-center justify-center px-4 pt-16 pb-10">
     <div id="skyOverlay" class="absolute inset-0 pointer-events-none bg-slate-900/50"></div>
 
     <div class="absolute inset-0 flex items-center justify-center">
-      <svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-2xl max-w-full h-auto">
+      <svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg" class="hero-illustration drop-shadow-2xl max-w-full h-auto">
 
         <rect width="900" height="400" fill="#87CEEB"/>
 
@@ -105,58 +110,63 @@
       </svg>
     </div>
 
-    <div class="absolute top-24 md:top-1/3 left-1/2 -translate-x-1/2 text-center z-10 w-full px-3">
-      <h1 class="text-4xl md:text-7xl font-black text-white drop-shadow-lg tracking-wider">TRANG TRẠI GÀ B</h1>
-      <p id="welcomeMessage" class="text-lg md:text-3xl text-amber-100 mt-4 drop-shadow">Chào mừng bạn đến ngôi nhà vui vẻ! 🐔☀️</p>
+    <div class="hero-content relative z-10 w-full max-w-6xl mx-auto px-2">
+      <div class="hero-card text-center">
+        <p class="hero-kicker">Game quản lý trang trại mini</p>
+        <h2 class="hero-title">TRANG TRẠI GÀ B</h2>
+        <p id="welcomeMessage" class="hero-subtitle">Chào mừng bạn đến ngôi nhà vui vẻ! 🐔☀️</p>
 
-      <div class="mt-6 flex flex-wrap justify-center gap-3">
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Cục tác: <span id="cluckCount">0</span></div>
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Lượt cho ăn: <span id="feedCount">0</span></div>
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Trứng nhặt: <span id="eggCount">0</span></div>
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Tồn kho trứng: <span id="eggStock">0</span></div>
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Trứng đã bán: <span id="soldEggCount">0</span></div>
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Gà con nở: <span id="hatchCount">0</span></div>
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Xu: <span id="coinCount">0</span></div>
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Chuỗi ngày: <span id="streakCount">0</span></div>
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Mức vui: <span id="moodCount">0%</span></div>
-        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Kỷ lục vui: <span id="bestMood">0%</span></div>
-      </div>
+        <div class="stats-grid mt-8">
+          <div class="stat-card"><span class="stat-label">📣 Cục tác</span><span id="cluckCount" class="stat-value">0</span></div>
+          <div class="stat-card"><span class="stat-label">🌽 Cho ăn</span><span id="feedCount" class="stat-value">0</span></div>
+          <div class="stat-card"><span class="stat-label">🥚 Trứng nhặt</span><span id="eggCount" class="stat-value">0</span></div>
+          <div class="stat-card"><span class="stat-label">📦 Trứng kho</span><span id="eggStock" class="stat-value">0</span></div>
+          <div class="stat-card"><span class="stat-label">🛒 Trứng bán</span><span id="soldEggCount" class="stat-value">0</span></div>
+          <div class="stat-card"><span class="stat-label">🐣 Gà nở</span><span id="hatchCount" class="stat-value">0</span></div>
+          <div class="stat-card"><span class="stat-label">🪙 Xu</span><span id="coinCount" class="stat-value">0</span></div>
+          <div class="stat-card"><span class="stat-label">🔥 Chuỗi ngày</span><span id="streakCount" class="stat-value">0</span></div>
+          <div class="stat-card"><span class="stat-label">🙂 Mức vui</span><span id="moodCount" class="stat-value">0%</span></div>
+          <div class="stat-card"><span class="stat-label">🏆 Kỷ lục vui</span><span id="bestMood" class="stat-value">0%</span></div>
+        </div>
 
-      <div class="mt-8 flex flex-wrap justify-center gap-3">
+        <div class="hero-actions mt-8 flex flex-wrap justify-center gap-3">
         <button onclick="document.getElementById('chickens').scrollIntoView({behavior:'smooth', block:'start'})"
-                class="px-7 py-3 bg-amber-500 hover:bg-amber-600 text-white text-xl md:text-2xl rounded-full shadow-xl transition">
+                class="cta-btn cta-primary px-7 py-3 text-xl md:text-2xl">
           Gặp 2 chú gà B ngay →
         </button>
         <button onclick="document.getElementById('farm-lab').scrollIntoView({behavior:'smooth', block:'start'})"
-                class="px-7 py-3 bg-cyan-600 hover:bg-cyan-700 text-white text-xl md:text-2xl rounded-full shadow-xl transition">
+                class="cta-btn cta-secondary px-7 py-3 text-xl md:text-2xl">
           Mở phòng điều khiển 🎮
         </button>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- GÀ B -->
-  <section id="chickens" class="max-w-6xl mx-auto py-20 px-6">
-    <h2 class="text-4xl md:text-5xl font-bold text-center mb-12 text-amber-700">Gặp gỡ 2 chú gà B 🐔</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
-      <article class="bg-white rounded-3xl p-8 shadow-xl text-center">
+  <section id="chickens" class="max-w-6xl mx-auto pt-10 pb-20 px-6">
+    <h2 class="text-4xl md:text-5xl text-center mb-4 text-amber-700 section-heading">Gặp gỡ 2 chú gà B 🐔</h2>
+    <p class="text-center text-lg md:text-xl text-slate-700 mb-12 max-w-3xl mx-auto">Mỗi chú gà có tính cách riêng. Bấm gọi trực tiếp để nghe cục tác và tăng điểm thật nhanh.</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <article class="chicken-card bg-white rounded-3xl p-8 text-center">
         <div class="text-8xl md:text-9xl mb-4">🐔</div>
         <h3 class="text-3xl md:text-4xl font-black text-red-500">Gà B 1</h3>
         <p class="mt-4 text-lg md:text-xl">Hay chạy nhảy, thích ăn sâu bọ. Cục tác to nhất trang trại!</p>
-        <button onclick="cluck(1)" class="mt-6 px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-full text-lg shadow">Gọi gà B 1</button>
+        <button onclick="cluck(1)" class="chicken-call-btn mt-6 px-6 py-3 text-lg">Gọi gà B 1</button>
       </article>
-      <article class="bg-white rounded-3xl p-8 shadow-xl text-center">
+      <article class="chicken-card bg-white rounded-3xl p-8 text-center">
         <div class="text-8xl md:text-9xl mb-4">🐔</div>
         <h3 class="text-3xl md:text-4xl font-black text-red-500">Gà B 2</h3>
         <p class="mt-4 text-lg md:text-xl">Hiền hơn, hay ngủ gật dưới gốc cây. Nhưng cũng rất nghịch!</p>
-        <button onclick="cluck(2)" class="mt-6 px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-full text-lg shadow">Gọi gà B 2</button>
+        <button onclick="cluck(2)" class="chicken-call-btn mt-6 px-6 py-3 text-lg">Gọi gà B 2</button>
       </article>
     </div>
   </section>
 
   <!-- PHONG DIEU KHIEN -->
   <section id="farm-lab" class="max-w-6xl mx-auto pb-20 px-6">
-    <h2 class="text-4xl md:text-5xl font-bold text-center mb-12 text-cyan-700">Phòng điều khiển trang trại</h2>
+    <h2 class="text-4xl md:text-5xl text-center mb-4 text-cyan-700 section-heading">Phòng điều khiển trang trại</h2>
+    <p class="text-center text-lg md:text-xl text-slate-700 mb-12 max-w-3xl mx-auto">Quản lý kinh tế, nhiệm vụ ngày, vòng quay, nâng cấp và tự động hóa trong một bảng điều khiển duy nhất.</p>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <div class="bg-white rounded-3xl p-8 shadow-xl farm-panel">
         <h3 class="text-3xl font-black text-amber-700">Cá nhân hóa</h3>
@@ -205,7 +215,7 @@
       <div class="bg-white rounded-3xl p-8 shadow-xl md:col-span-2 farm-panel">
         <h3 class="text-3xl font-black text-violet-700">Trung tâm quản lý</h3>
 
-        <div class="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="control-grid mt-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <section class="rounded-2xl border-2 border-violet-200 p-4 lab-card">
             <h4 class="text-2xl font-black text-violet-700">Kinh tế & nâng cấp</h4>
             <p class="mt-2 text-lg">Số dư hiện tại: <span id="coinBalance" class="font-black">0</span> xu</p>
@@ -338,10 +348,12 @@
       </div>
     </div>
   </section>
+  </main>
 
   <!-- FOOTER -->
-  <footer class="bg-amber-800 text-white py-8 text-center">
-    <p class="mt-2 text-lg">Click vào 2 chú gà trên tranh hoặc dùng phòng điều khiển để chơi nhé!</p>
+  <footer class="farm-footer text-white py-10 text-center px-4">
+    <p class="text-2xl font-black tracking-wide">Trang Trại Gà B</p>
+    <p class="mt-2 text-lg">Click vào 2 chú gà trên tranh hoặc dùng phòng điều khiển để chơi nhé.</p>
   </footer>
 
   <div id="quickDock" class="quick-dock">
