@@ -636,6 +636,26 @@ button:disabled {
   transition: width 0.2s linear;
 }
 
+.flash-order-card {
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.92) 0%, rgba(219, 234, 254, 0.8) 100%);
+}
+
+.flash-order-track {
+  width: 100%;
+  height: 0.62rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(29, 78, 216, 0.16);
+}
+
+.flash-order-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%);
+  transition: width 0.2s linear;
+}
+
 .decor-grid {
   display: grid;
   gap: 0.75rem;
@@ -1182,6 +1202,20 @@ body.night-mode #wholesaleMeta {
 }
 
 body.night-mode .wholesale-track {
+  background: rgba(148, 163, 184, 0.24);
+}
+
+body.night-mode .flash-order-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.82) 100%);
+  border-color: rgba(125, 211, 252, 0.34);
+}
+
+body.night-mode #flashOrderHint,
+body.night-mode #flashOrderMeta {
+  color: #cbd5e1;
+}
+
+body.night-mode .flash-order-track {
   background: rgba(148, 163, 184, 0.24);
 }
 

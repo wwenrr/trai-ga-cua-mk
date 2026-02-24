@@ -70,6 +70,13 @@ export const WEATHER_SHIELD_DURATION_MS = 36000;
 export const WEATHER_SHIELD_MIN_MOOD_FACTOR = 1;
 export const WEATHER_SHIELD_MAX_INTERVAL_MS = 4300;
 export const WEATHER_SHIELD_COIN_BONUS = 1;
+export const FLASH_ORDER_COOLDOWN_MS = 45000;
+export const FLASH_ORDER_DURATION_MS = 30000;
+export const FLASH_ORDER_MIN_EGGS = 5;
+export const FLASH_ORDER_MAX_EGGS = 12;
+export const FLASH_ORDER_BASE_REWARD = 24;
+export const FLASH_ORDER_REWARD_PER_EGG = 11;
+export const FLASH_ORDER_FEVER_REWARD_BONUS = 14;
 export const PREMIUM_FEED_CRAFT_EGGS = 3;
 export const PREMIUM_FEED_FEED_BONUS = 8;
 export const PREMIUM_FEED_COIN_BONUS = 6;
@@ -200,6 +207,16 @@ export const DEFAULT_STATE = {
     startedAt: 0,
     durationMs: 0,
     used: 0
+  },
+  flashOrder: {
+    active: false,
+    target: 0,
+    reward: 0,
+    startedAt: 0,
+    durationMs: 0,
+    lastGeneratedAt: 0,
+    completed: 0,
+    expired: 0
   },
   dailyGift: {
     lastClaimDate: '',

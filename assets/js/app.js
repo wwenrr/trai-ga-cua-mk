@@ -33,6 +33,13 @@ import {
   WEATHER_SHIELD_MIN_MOOD_FACTOR,
   WEATHER_SHIELD_MAX_INTERVAL_MS,
   WEATHER_SHIELD_COIN_BONUS,
+  FLASH_ORDER_COOLDOWN_MS,
+  FLASH_ORDER_DURATION_MS,
+  FLASH_ORDER_MIN_EGGS,
+  FLASH_ORDER_MAX_EGGS,
+  FLASH_ORDER_BASE_REWARD,
+  FLASH_ORDER_REWARD_PER_EGG,
+  FLASH_ORDER_FEVER_REWARD_BONUS,
   PREMIUM_FEED_CRAFT_EGGS,
   PREMIUM_FEED_FEED_BONUS,
   PREMIUM_FEED_COIN_BONUS,
@@ -304,6 +311,39 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeFlashOrder(rawOrder) {
+    if (!rawOrder || typeof rawOrder !== 'object') {
+      return {
+        active: false,
+        target: 0,
+        reward: 0,
+        startedAt: 0,
+        durationMs: 0,
+        lastGeneratedAt: 0,
+        completed: 0,
+        expired: 0
+      };
+    }
+
+    const active = Boolean(rawOrder.active);
+    const target = clamp(toSafeNumber(rawOrder.target), 0, 9999);
+    const reward = clamp(toSafeNumber(rawOrder.reward), 0, 99999);
+    const startedAt = toSafeNumber(rawOrder.startedAt);
+    const durationMs = clamp(toSafeNumber(rawOrder.durationMs), 0, 86400000);
+    const hasValidActiveOrder = active && target > 0 && reward > 0 && startedAt > 0 && durationMs > 0;
+
+    return {
+      active: hasValidActiveOrder,
+      target: hasValidActiveOrder ? target : 0,
+      reward: hasValidActiveOrder ? reward : 0,
+      startedAt: hasValidActiveOrder ? startedAt : 0,
+      durationMs: hasValidActiveOrder ? durationMs : 0,
+      lastGeneratedAt: toSafeNumber(rawOrder.lastGeneratedAt),
+      completed: toSafeNumber(rawOrder.completed),
+      expired: toSafeNumber(rawOrder.expired)
+    };
+  }
+
   function normalizeDailyGift(rawGift) {
     if (!rawGift || typeof rawGift !== 'object') {
       return {
@@ -444,6 +484,7 @@ import { getRefs } from './dom.js';
       fever: normalizeFever(input.fever),
       wholesale: normalizeWholesale(input.wholesale),
       weatherShield: normalizeWeatherShield(input.weatherShield),
+      flashOrder: normalizeFlashOrder(input.flashOrder),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
       premiumFeed: normalizePremiumFeed(input.premiumFeed),
@@ -1144,6 +1185,153 @@ import { getRefs } from './dom.js';
 
   function getWholesalePayout() {
     return getQuickSellUnitPrice() * WHOLESALE_EGG_BATCH + getWholesaleBonus();
+  }
+
+  function getFlashOrderCooldownRemainingMs() {
+    if (!state.flashOrder || state.flashOrder.lastGeneratedAt <= 0) {
+      return 0;
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - state.flashOrder.lastGeneratedAt);
+    return Math.max(0, FLASH_ORDER_COOLDOWN_MS - elapsedMs);
+  }
+
+  function canGenerateFlashOrder() {
+    return !state.flashOrder.active && getFlashOrderCooldownRemainingMs() <= 0;
+  }
+
+  function clearFlashOrderState() {
+    state.flashOrder.active = false;
+    state.flashOrder.target = 0;
+    state.flashOrder.reward = 0;
+    state.flashOrder.startedAt = 0;
+    state.flashOrder.durationMs = 0;
+  }
+
+  function createFlashOrderOffer() {
+    const baseTarget = FLASH_ORDER_MIN_EGGS + Math.floor(Math.random() * (FLASH_ORDER_MAX_EGGS - FLASH_ORDER_MIN_EGGS + 1));
+    const streakBoost = Math.min(2, Math.floor(state.streak / 6));
+    const upgradeBoost = Math.min(2, Math.floor(state.upgrades.eggLevel / 4));
+    const target = clamp(baseTarget + streakBoost + upgradeBoost, FLASH_ORDER_MIN_EGGS, FLASH_ORDER_MAX_EGGS);
+
+    const paceBonus = Math.min(20, state.upgrades.eggLevel * 2 + Math.floor(state.streak / 2));
+    const marketBonus = Math.floor(getQuickSellUnitPrice() / 2);
+    const feverBonus = isFeverRunning() ? FLASH_ORDER_FEVER_REWARD_BONUS : 0;
+    const reward = FLASH_ORDER_BASE_REWARD + target * FLASH_ORDER_REWARD_PER_EGG + paceBonus + marketBonus + feverBonus;
+
+    return {
+      target,
+      reward
+    };
+  }
+
+  function getFlashOrderProgress() {
+    if (!state.flashOrder.active) {
+      const cooldownRemainingMs = getFlashOrderCooldownRemainingMs();
+      const cooldownProgress = FLASH_ORDER_COOLDOWN_MS > 0
+        ? clamp(Math.round(((FLASH_ORDER_COOLDOWN_MS - cooldownRemainingMs) / FLASH_ORDER_COOLDOWN_MS) * 100), 0, 100)
+        : 100;
+
+      return {
+        active: false,
+        ready: cooldownRemainingMs <= 0,
+        progress: cooldownProgress,
+        remainingMs: 0,
+        cooldownRemainingMs
+      };
+    }
+
+    const durationMs = Math.max(1, state.flashOrder.durationMs || FLASH_ORDER_DURATION_MS);
+    const elapsedMs = Math.max(0, Date.now() - state.flashOrder.startedAt);
+    const remainingMs = Math.max(0, durationMs - elapsedMs);
+
+    return {
+      active: true,
+      ready: remainingMs <= 0,
+      progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+      remainingMs,
+      cooldownRemainingMs: getFlashOrderCooldownRemainingMs()
+    };
+  }
+
+  function expireFlashOrder(showFeedback = false) {
+    if (!state.flashOrder.active) {
+      return false;
+    }
+
+    const target = state.flashOrder.target;
+    state.flashOrder.expired += 1;
+    clearFlashOrderState();
+    saveState();
+
+    if (showFeedback) {
+      addLog(`Đơn gấp ${target} trứng đã quá hạn.`);
+      showToast('Đơn gấp đã hết hạn');
+    }
+
+    return true;
+  }
+
+  function renderFlashOrderPanel() {
+    if (!refs.flashOrderStatus || !refs.flashOrderHint || !refs.flashOrderMeta || !refs.flashOrderProgressBar || !refs.flashOrderActionBtn) {
+      return;
+    }
+
+    const progress = getFlashOrderProgress();
+    refs.flashOrderMeta.textContent = `Đã hoàn thành ${state.flashOrder.completed} đơn gấp • quá hạn ${state.flashOrder.expired} đơn.`;
+
+    if (progress.active) {
+      const missing = Math.max(0, state.flashOrder.target - state.eggStock);
+      const canClaim = missing <= 0;
+
+      refs.flashOrderStatus.textContent = `Đơn gấp còn ${Math.ceil(progress.remainingMs / 1000)}s: giao ${state.flashOrder.target} trứng.`;
+      refs.flashOrderHint.textContent = canClaim
+        ? `Kho đã đủ hàng, giao ngay để nhận +${state.flashOrder.reward} xu.`
+        : `Cần thêm ${missing} trứng để chốt đơn trước khi hết giờ.`;
+      refs.flashOrderProgressBar.style.width = `${progress.progress}%`;
+
+      refs.flashOrderActionBtn.disabled = !canClaim;
+      refs.flashOrderActionBtn.classList.toggle('opacity-60', !canClaim);
+      refs.flashOrderActionBtn.classList.toggle('cursor-not-allowed', !canClaim);
+      refs.flashOrderActionBtn.textContent = canClaim
+        ? `Giao ngay (+${state.flashOrder.reward} xu)`
+        : `Thiếu ${missing} trứng`;
+      return;
+    }
+
+    const canGenerate = canGenerateFlashOrder();
+    refs.flashOrderActionBtn.disabled = !canGenerate;
+    refs.flashOrderActionBtn.classList.toggle('opacity-60', !canGenerate);
+    refs.flashOrderActionBtn.classList.toggle('cursor-not-allowed', !canGenerate);
+
+    if (canGenerate) {
+      refs.flashOrderStatus.textContent = 'Sẵn sàng nhận đơn gấp mới.';
+      refs.flashOrderHint.textContent = `Nhận đơn mới để mở thử thách giao trứng trong ${Math.round(FLASH_ORDER_DURATION_MS / 1000)}s.`;
+      refs.flashOrderActionBtn.textContent = 'Nhận đơn gấp';
+      refs.flashOrderProgressBar.style.width = '100%';
+      return;
+    }
+
+    refs.flashOrderStatus.textContent = `Đang làm mới đơn gấp... còn ${Math.ceil(progress.cooldownRemainingMs / 1000)}s.`;
+    refs.flashOrderHint.textContent = `Mỗi đơn có hồi chiêu ${Math.round(FLASH_ORDER_COOLDOWN_MS / 1000)}s trước khi nhận lượt mới.`;
+    refs.flashOrderActionBtn.textContent = 'Đang hồi đơn';
+    refs.flashOrderProgressBar.style.width = `${progress.progress}%`;
+  }
+
+  function runFlashOrderTick() {
+    const progress = getFlashOrderProgress();
+    if (!progress.active) {
+      renderFlashOrderPanel();
+      return;
+    }
+
+    if (progress.ready) {
+      expireFlashOrder(true);
+      updateUI();
+      return;
+    }
+
+    renderFlashOrderPanel();
   }
 
   function renderWholesalePanel() {
@@ -2142,6 +2330,17 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const flashOrderProgress = getFlashOrderProgress();
+    if (flashOrderProgress.active && state.eggStock >= state.flashOrder.target) {
+      refs.nextActionHint.textContent = `Gợi ý: đơn gấp còn ${Math.ceil(flashOrderProgress.remainingMs / 1000)}s, giao ngay để nhận +${state.flashOrder.reward} xu.`;
+      return;
+    }
+
+    if (!flashOrderProgress.active && flashOrderProgress.ready) {
+      refs.nextActionHint.textContent = `Gợi ý: nhận đơn gấp mới để chạy kèo giao nhanh ${Math.round(FLASH_ORDER_DURATION_MS / 1000)}s.`;
+      return;
+    }
+
     if (state.luckySpin.lastSpinDate !== today) {
       refs.nextActionHint.textContent = 'Gợi ý: thử vòng quay may mắn hôm nay để lấy thêm xu/trứng miễn phí.';
       return;
@@ -2321,6 +2520,25 @@ import { getRefs } from './dom.js';
         desc: `Bán lô ${WHOLESALE_EGG_BATCH} trứng để nhận +${payout} xu.`,
         cta: 'Bán lô',
         triggerRef: refs.startWholesaleBtn
+      });
+    }
+
+    const flashOrderProgress = getFlashOrderProgress();
+    if (flashOrderProgress.active && state.eggStock >= state.flashOrder.target) {
+      actions.push({
+        id: 'priority_flash_order_claim',
+        title: 'Đơn gấp đã đủ hàng',
+        desc: `Giao ${state.flashOrder.target} trứng trong ${Math.ceil(flashOrderProgress.remainingMs / 1000)}s để nhận +${state.flashOrder.reward} xu.`,
+        cta: 'Giao đơn',
+        triggerRef: refs.flashOrderActionBtn
+      });
+    } else if (!flashOrderProgress.active && flashOrderProgress.ready) {
+      actions.push({
+        id: 'priority_flash_order_new',
+        title: 'Đơn gấp mới đã mở',
+        desc: `Nhận đơn 30s để lấy thưởng cao trong ngắn hạn.`,
+        cta: 'Nhận đơn',
+        triggerRef: refs.flashOrderActionBtn
       });
     }
 
@@ -2560,6 +2778,7 @@ import { getRefs } from './dom.js';
     renderQuest();
     renderMarketOrder();
     renderWholesalePanel();
+    renderFlashOrderPanel();
     renderQuickSell();
     renderCoinMachine();
     renderDailyGift();
@@ -2915,6 +3134,54 @@ import { getRefs } from './dom.js';
     showToast(`Hợp đồng sỉ thành công: +${payout} xu`);
   });
 
+  refs.flashOrderActionBtn.addEventListener('click', () => {
+    const progress = getFlashOrderProgress();
+
+    if (!progress.active) {
+      if (!progress.ready) {
+        showToast(`Đơn gấp đang hồi, còn ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây`);
+        return;
+      }
+
+      const offer = createFlashOrderOffer();
+      const now = Date.now();
+      state.flashOrder.active = true;
+      state.flashOrder.target = offer.target;
+      state.flashOrder.reward = offer.reward;
+      state.flashOrder.startedAt = now;
+      state.flashOrder.durationMs = FLASH_ORDER_DURATION_MS;
+      state.flashOrder.lastGeneratedAt = now;
+      saveState();
+      updateUI();
+      addLog(`Nhận đơn gấp: giao ${offer.target} trứng trong ${Math.round(FLASH_ORDER_DURATION_MS / 1000)}s để nhận +${offer.reward} xu.`);
+      showToast(`Đơn gấp mới: ${offer.target} trứng / +${offer.reward} xu`);
+      return;
+    }
+
+    if (progress.ready) {
+      expireFlashOrder(true);
+      updateUI();
+      return;
+    }
+
+    if (state.eggStock < state.flashOrder.target) {
+      showToast(`Cần thêm ${state.flashOrder.target - state.eggStock} trứng để giao đơn gấp`);
+      return;
+    }
+
+    const target = state.flashOrder.target;
+    const reward = state.flashOrder.reward;
+    state.eggStock -= target;
+    state.soldEggCount += target;
+    addCoins(reward);
+    state.flashOrder.completed += 1;
+    clearFlashOrderState();
+    saveState();
+    updateUI();
+    addLog(`Hoàn tất đơn gấp ${target} trứng, nhận +${reward} xu.`);
+    showToast(`Đơn gấp hoàn tất: +${reward} xu`);
+  });
+
   refs.quickSellOneBtn.addEventListener('click', () => {
     sellEggStock(1);
   });
@@ -3262,6 +3529,8 @@ import { getRefs } from './dom.js';
       refs.startFeverBtn.click();
     } else if (key === 'k') {
       refs.startWholesaleBtn.click();
+    } else if (key === 'j') {
+      refs.flashOrderActionBtn.click();
     } else if (key === 'y') {
       refs.activateWeatherShieldBtn.click();
     } else if (key === 't') {
@@ -3366,6 +3635,7 @@ import { getRefs } from './dom.js';
     renderCoinMachine();
     renderWholesalePanel();
     runEggRushTick();
+    runFlashOrderTick();
     runWeatherShieldTick();
     runFeverTick();
     runComboTick();
@@ -3381,6 +3651,7 @@ import { getRefs } from './dom.js';
   }, 1000);
 
   runWeatherShieldTick();
+  runFlashOrderTick();
   runFeverTick();
   runComboTick();
   updateUI();
