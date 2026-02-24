@@ -11,6 +11,15 @@ export const MARKET_ORDER_MAX_EGGS = 12;
 export const AUTO_FEEDER_MAX_LEVEL = 6;
 export const AUTO_FEEDER_BASE_INTERVAL_MS = 22000;
 export const AUTO_FEEDER_MIN_INTERVAL_MS = 7000;
+export const LUCKY_SPIN_REWARDS = [
+  { id: 'spin_coin_20', label: '+20 xu', type: 'coins', amount: 20, weight: 30 },
+  { id: 'spin_coin_45', label: '+45 xu', type: 'coins', amount: 45, weight: 20 },
+  { id: 'spin_coin_90', label: '+90 xu', type: 'coins', amount: 90, weight: 8 },
+  { id: 'spin_egg_3', label: '+3 trứng kho', type: 'eggStock', amount: 3, weight: 16 },
+  { id: 'spin_egg_6', label: '+6 trứng kho', type: 'eggStock', amount: 6, weight: 8 },
+  { id: 'spin_feed_4', label: '+4 lượt cho ăn', type: 'feedCount', amount: 4, weight: 12 },
+  { id: 'spin_feed_8', label: '+8 lượt cho ăn', type: 'feedCount', amount: 8, weight: 6 }
+];
 
 export const WEATHER_CONFIG = {
   sunny: {
@@ -99,6 +108,11 @@ export const DEFAULT_STATE = {
     lastClaimDate: '',
     totalClaimed: 0
   },
+  luckySpin: {
+    lastSpinDate: '',
+    totalSpins: 0,
+    lastRewardId: ''
+  },
   coinMachine: {
     active: false,
     startedAt: 0,
@@ -129,6 +143,7 @@ export const ACHIEVEMENTS = [
   { id: 'feed_5', label: 'Bếp trưởng', desc: 'Cho ăn ít nhất 5 lần', reward: 18, check: (s) => s.feedCount >= 5 },
   { id: 'egg_3', label: 'Thợ săn trứng', desc: 'Nhặt ít nhất 3 trứng', reward: 20, check: (s) => s.eggCount >= 3 },
   { id: 'trade_20', label: 'Thương lái mát tay', desc: 'Bán ít nhất 20 trứng tồn kho', reward: 26, check: (s) => s.soldEggCount >= 20 },
+  { id: 'spin_10', label: 'Vua vòng quay', desc: 'Quay may mắn ít nhất 10 lần', reward: 28, check: (s) => s.luckySpin && s.luckySpin.totalSpins >= 10 },
   { id: 'hatch_3', label: 'Lò ấp mát tay', desc: 'Ấp nở ít nhất 3 gà con', reward: 24, check: (s) => s.hatchCount >= 3 },
   { id: 'happy_80', label: 'Đàn gà cực vui', desc: 'Đạt mood từ 80%', reward: 25, check: (_, mood) => mood >= 80 },
   { id: 'legend_100', label: 'Huyền thoại trang trại', desc: 'Đạt mood 100%', reward: 35, check: (_, mood) => mood >= 100 }

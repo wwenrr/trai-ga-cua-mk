@@ -45,6 +45,10 @@ export function getRefs() {
     giftProgressText: document.getElementById('giftProgressText'),
     giftProgressBar: document.getElementById('giftProgressBar'),
     claimGiftBtn: document.getElementById('claimGiftBtn'),
+    luckySpinStatus: document.getElementById('luckySpinStatus'),
+    luckySpinReward: document.getElementById('luckySpinReward'),
+    luckySpinTotal: document.getElementById('luckySpinTotal'),
+    luckySpinBtn: document.getElementById('luckySpinBtn'),
 
     questTitle: document.getElementById('questTitle'),
     questDesc: document.getElementById('questDesc'),

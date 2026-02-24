@@ -12,6 +12,7 @@ import {
   AUTO_FEEDER_MAX_LEVEL,
   AUTO_FEEDER_BASE_INTERVAL_MS,
   AUTO_FEEDER_MIN_INTERVAL_MS,
+  LUCKY_SPIN_REWARDS,
   WEATHER_CONFIG,
   QUEST_METRICS,
   DEFAULT_STATE,
@@ -140,6 +141,22 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeLuckySpin(rawSpin) {
+    if (!rawSpin || typeof rawSpin !== 'object') {
+      return {
+        lastSpinDate: '',
+        totalSpins: 0,
+        lastRewardId: ''
+      };
+    }
+
+    return {
+      lastSpinDate: typeof rawSpin.lastSpinDate === 'string' ? rawSpin.lastSpinDate : '',
+      totalSpins: toSafeNumber(rawSpin.totalSpins),
+      lastRewardId: typeof rawSpin.lastRewardId === 'string' ? rawSpin.lastRewardId : ''
+    };
+  }
+
   function normalizeCoinMachine(rawMachine) {
     if (!rawMachine || typeof rawMachine !== 'object') {
       return {
@@ -228,6 +245,7 @@ import { getRefs } from './dom.js';
       },
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
       dailyGift: normalizeDailyGift(input.dailyGift),
+      luckySpin: normalizeLuckySpin(input.luckySpin),
       coinMachine: normalizeCoinMachine(input.coinMachine),
       incubator: normalizeIncubator(input.incubator),
       marketOrder: normalizeMarketOrder(input.marketOrder),
@@ -715,6 +733,77 @@ import { getRefs } from './dom.js';
     refs.claimCoinMachineBtn.textContent = 'Đang ủ...';
   }
 
+  function getLuckySpinRewardById(id) {
+    return LUCKY_SPIN_REWARDS.find((item) => item.id === id) || null;
+  }
+
+  function pickLuckySpinReward() {
+    const pool = LUCKY_SPIN_REWARDS.filter((item) => item && item.weight > 0 && item.amount > 0);
+    if (pool.length === 0) {
+      return null;
+    }
+
+    const totalWeight = pool.reduce((sum, item) => sum + item.weight, 0);
+    let roll = Math.random() * totalWeight;
+
+    for (const item of pool) {
+      roll -= item.weight;
+      if (roll <= 0) {
+        return item;
+      }
+    }
+
+    return pool[pool.length - 1];
+  }
+
+  function applyLuckySpinReward(reward) {
+    if (!reward) {
+      return;
+    }
+
+    if (reward.type === 'coins') {
+      addCoins(reward.amount);
+      return;
+    }
+
+    if (reward.type === 'eggStock') {
+      state.eggStock += reward.amount;
+      return;
+    }
+
+    if (reward.type === 'feedCount') {
+      state.feedCount += reward.amount;
+    }
+  }
+
+  function renderLuckySpin() {
+    if (!refs.luckySpinStatus || !refs.luckySpinReward || !refs.luckySpinTotal || !refs.luckySpinBtn) {
+      return;
+    }
+
+    const today = getTodayKey();
+    const spunToday = state.luckySpin.lastSpinDate === today;
+    const lastReward = getLuckySpinRewardById(state.luckySpin.lastRewardId);
+
+    refs.luckySpinTotal.textContent = `Tổng số lần quay: ${state.luckySpin.totalSpins}`;
+    refs.luckySpinReward.textContent = lastReward
+      ? `Lần gần nhất: ${lastReward.label}`
+      : 'Chưa có lượt quay nào được ghi nhận.';
+
+    refs.luckySpinBtn.disabled = spunToday;
+    refs.luckySpinBtn.classList.toggle('opacity-60', spunToday);
+    refs.luckySpinBtn.classList.toggle('cursor-not-allowed', spunToday);
+
+    if (spunToday) {
+      refs.luckySpinStatus.textContent = 'Bạn đã quay hôm nay rồi, quay lại vào ngày mai.';
+      refs.luckySpinBtn.textContent = 'Đã quay hôm nay';
+      return;
+    }
+
+    refs.luckySpinStatus.textContent = 'Có thể quay ngay để nhận thưởng ngẫu nhiên.';
+    refs.luckySpinBtn.textContent = 'Quay ngay';
+  }
+
   function sellEggStock(amount) {
     const request = toSafeNumber(amount);
     if (request <= 0 || state.eggStock <= 0) {
@@ -1081,6 +1170,7 @@ import { getRefs } from './dom.js';
     renderQuickSell();
     renderCoinMachine();
     renderDailyGift();
+    renderLuckySpin();
     renderAutoFeeder();
     renderIncubator();
     renderLogs();
@@ -1360,6 +1450,30 @@ import { getRefs } from './dom.js';
     showToast(`Điểm danh thành công: +${reward.coins} xu${reward.eggStock > 0 ? `, +${reward.eggStock} trứng` : ''}`);
   });
 
+  refs.luckySpinBtn.addEventListener('click', () => {
+    const today = getTodayKey();
+    if (state.luckySpin.lastSpinDate === today) {
+      showToast('Bạn đã quay may mắn hôm nay rồi');
+      return;
+    }
+
+    const reward = pickLuckySpinReward();
+    if (!reward) {
+      showToast('Chưa thể quay lúc này, thử lại sau');
+      return;
+    }
+
+    applyLuckySpinReward(reward);
+    state.luckySpin.lastSpinDate = today;
+    state.luckySpin.totalSpins += 1;
+    state.luckySpin.lastRewardId = reward.id;
+
+    saveState();
+    updateUI();
+    addLog(`Quay may mắn nhận thưởng: ${reward.label}.`);
+    showToast(`Vòng quay: ${reward.label}`);
+  });
+
   refs.buyFeedUpgradeBtn.addEventListener('click', () => {
     if (state.upgrades.feedLevel >= MAX_UPGRADE_LEVEL) {
       showToast('Nâng cấp cho ăn đã đạt mức tối đa');
@@ -1472,7 +1586,8 @@ import { getRefs } from './dom.js';
       soundEnabled: state.soundEnabled,
       streak: state.streak,
       lastVisitDate: state.lastVisitDate,
-      dailyGift: state.dailyGift
+      dailyGift: state.dailyGift,
+      luckySpin: state.luckySpin
     };
 
     Object.assign(state, normalizeState({ ...DEFAULT_STATE, ...keep }));
@@ -1539,6 +1654,8 @@ import { getRefs } from './dom.js';
       refs.toggleAutoFeederBtn.click();
     } else if (key === 'g') {
       refs.claimGiftBtn.click();
+    } else if (key === 'l') {
+      refs.luckySpinBtn.click();
     } else if (key === 'r') {
       refs.claimCoinMachineBtn.click();
     } else if (key === 'h') {
