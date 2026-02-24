@@ -63,6 +63,11 @@ export function getRefs() {
 
     toast: document.getElementById('toast'),
     toTop: document.getElementById('toTop'),
+    quickDock: document.getElementById('quickDock'),
+    dockCluckBtn: document.getElementById('dockCluckBtn'),
+    dockFeedBtn: document.getElementById('dockFeedBtn'),
+    dockEggBtn: document.getElementById('dockEggBtn'),
+    dockLabBtn: document.getElementById('dockLabBtn'),
     sun: document.getElementById('sun'),
     sunRays: document.getElementById('sunRays')
   };

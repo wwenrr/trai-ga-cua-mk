@@ -1180,6 +1180,26 @@ import { getRefs } from './dom.js';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
+  refs.dockCluckBtn.addEventListener('click', () => {
+    cluck(Math.random() < 0.5 ? 1 : 2);
+  });
+
+  refs.dockFeedBtn.addEventListener('click', () => {
+    refs.feedBtn.click();
+  });
+
+  refs.dockEggBtn.addEventListener('click', () => {
+    refs.spawnEggBtn.click();
+  });
+
+  refs.dockLabBtn.addEventListener('click', () => {
+    const lab = document.getElementById('farm-lab');
+    if (!lab) {
+      return;
+    }
+    lab.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
   document.addEventListener('keydown', (event) => {
     const targetTag = (event.target && event.target.tagName) ? event.target.tagName.toLowerCase() : '';
     if (targetTag === 'input' || targetTag === 'textarea') {
