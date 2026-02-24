@@ -11,6 +11,10 @@ export const MARKET_ORDER_MAX_EGGS = 12;
 export const AUTO_FEEDER_MAX_LEVEL = 6;
 export const AUTO_FEEDER_BASE_INTERVAL_MS = 22000;
 export const AUTO_FEEDER_MIN_INTERVAL_MS = 7000;
+export const AUTO_SELL_MIN_THRESHOLD = 8;
+export const AUTO_SELL_MAX_THRESHOLD = 60;
+export const AUTO_SELL_DEFAULT_THRESHOLD = 18;
+export const AUTO_SELL_BATCH_SIZE = 3;
 export const EGG_RUSH_COST = 42;
 export const EGG_RUSH_DURATION_MS = 30000;
 export const EGG_RUSH_INTERVAL_FACTOR = 0.58;
@@ -188,6 +192,12 @@ export const DEFAULT_STATE = {
     level: 0,
     enabled: false,
     lastFeedAt: 0
+  },
+  autoSeller: {
+    enabled: false,
+    threshold: AUTO_SELL_DEFAULT_THRESHOLD,
+    totalEggsSold: 0,
+    totalCoinsEarned: 0
   },
   autoEggEnabled: true,
   eggRush: {

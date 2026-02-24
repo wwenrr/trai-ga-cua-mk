@@ -12,6 +12,10 @@ import {
   AUTO_FEEDER_MAX_LEVEL,
   AUTO_FEEDER_BASE_INTERVAL_MS,
   AUTO_FEEDER_MIN_INTERVAL_MS,
+  AUTO_SELL_MIN_THRESHOLD,
+  AUTO_SELL_MAX_THRESHOLD,
+  AUTO_SELL_DEFAULT_THRESHOLD,
+  AUTO_SELL_BATCH_SIZE,
   EGG_RUSH_COST,
   EGG_RUSH_DURATION_MS,
   EGG_RUSH_INTERVAL_FACTOR,
@@ -175,6 +179,25 @@ import { getRefs } from './dom.js';
       level,
       enabled,
       lastFeedAt: level > 0 ? lastFeedAt : 0
+    };
+  }
+
+  function normalizeAutoSeller(rawSeller) {
+    if (!rawSeller || typeof rawSeller !== 'object') {
+      return {
+        enabled: false,
+        threshold: AUTO_SELL_DEFAULT_THRESHOLD,
+        totalEggsSold: 0,
+        totalCoinsEarned: 0
+      };
+    }
+
+    const threshold = clamp(toSafeNumber(rawSeller.threshold), AUTO_SELL_MIN_THRESHOLD, AUTO_SELL_MAX_THRESHOLD);
+    return {
+      enabled: Boolean(rawSeller.enabled),
+      threshold,
+      totalEggsSold: toSafeNumber(rawSeller.totalEggsSold),
+      totalCoinsEarned: toSafeNumber(rawSeller.totalCoinsEarned)
     };
   }
 
@@ -582,6 +605,7 @@ import { getRefs } from './dom.js';
         eggLevel: clamp(toSafeNumber(upgrades.eggLevel), 0, MAX_UPGRADE_LEVEL)
       },
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
+      autoSeller: normalizeAutoSeller(input.autoSeller),
       autoEggEnabled: typeof input.autoEggEnabled === 'boolean' ? input.autoEggEnabled : true,
       eggRush: normalizeEggRush(input.eggRush),
       decorations: normalizeDecorations(input.decorations),
@@ -2244,6 +2268,74 @@ import { getRefs } from './dom.js';
     updateUI();
   }
 
+  function getAutoSellThreshold() {
+    return clamp(toSafeNumber(state.autoSeller.threshold), AUTO_SELL_MIN_THRESHOLD, AUTO_SELL_MAX_THRESHOLD);
+  }
+
+  function renderAutoSellerPanel() {
+    if (!refs.autoSellStatus || !refs.autoSellHint || !refs.autoSellMeta || !refs.autoSellThresholdInput || !refs.autoSellThresholdValue || !refs.autoSellStockProgressBar || !refs.toggleAutoSellBtn) {
+      return;
+    }
+
+    const threshold = getAutoSellThreshold();
+    if (state.autoSeller.threshold !== threshold) {
+      state.autoSeller.threshold = threshold;
+    }
+
+    refs.autoSellThresholdInput.min = String(AUTO_SELL_MIN_THRESHOLD);
+    refs.autoSellThresholdInput.max = String(AUTO_SELL_MAX_THRESHOLD);
+    refs.autoSellThresholdInput.value = String(threshold);
+    refs.autoSellThresholdValue.textContent = `${threshold} trứng`;
+    refs.autoSellMeta.textContent = `Đã bán tự động ${state.autoSeller.totalEggsSold} trứng • thu ${state.autoSeller.totalCoinsEarned} xu.`;
+
+    const stockProgress = threshold > 0 ? clamp(Math.round((state.eggStock / threshold) * 100), 0, 100) : 0;
+    refs.autoSellStockProgressBar.style.width = `${stockProgress}%`;
+
+    refs.toggleAutoSellBtn.textContent = state.autoSeller.enabled ? 'Auto bán: Bật' : 'Auto bán: Tắt';
+
+    if (!state.autoSeller.enabled) {
+      refs.autoSellStatus.classList.remove('urgent-timer');
+      refs.autoSellStatus.textContent = 'Auto bán đang tắt.';
+      refs.autoSellHint.textContent = `Bật để tự bán theo lô ${AUTO_SELL_BATCH_SIZE} trứng khi kho đạt ngưỡng đã chọn.`;
+      return;
+    }
+
+    const waiting = state.eggStock <= threshold;
+    refs.autoSellStatus.classList.toggle('urgent-timer', !waiting && state.eggStock >= threshold + AUTO_SELL_BATCH_SIZE * 2);
+
+    if (waiting) {
+      refs.autoSellStatus.textContent = `Đang chờ kho vượt ${threshold} trứng để bắt đầu tự bán.`;
+      refs.autoSellHint.textContent = `Giá hiện tại ${getQuickSellUnitPrice()} xu/trứng • luôn giữ lại tối thiểu ${threshold} trứng trong kho.`;
+      return;
+    }
+
+    refs.autoSellStatus.textContent = `Kho đã vượt ngưỡng, hệ thống sẽ tự bán mỗi lượt ${AUTO_SELL_BATCH_SIZE} trứng.`;
+    refs.autoSellHint.textContent = `Giá hiện tại ${getQuickSellUnitPrice()} xu/trứng • dư ${Math.max(0, state.eggStock - threshold)} trứng để giải phóng dần.`;
+  }
+
+  function runAutoSellerTick() {
+    if (!state.autoSeller.enabled) {
+      return;
+    }
+
+    const threshold = getAutoSellThreshold();
+    const excess = state.eggStock - threshold;
+    if (excess <= 0) {
+      return;
+    }
+
+    const quantity = Math.min(AUTO_SELL_BATCH_SIZE, excess);
+    const unitPrice = getQuickSellUnitPrice();
+    const revenue = quantity * unitPrice;
+    state.eggStock -= quantity;
+    state.soldEggCount += quantity;
+    state.autoSeller.totalEggsSold += quantity;
+    state.autoSeller.totalCoinsEarned += revenue;
+    addCoins(revenue);
+    saveState();
+    updateUI();
+  }
+
   function renderEconomy() {
     refs.coinBalance.textContent = String(state.coins);
     refs.eggStockBalance.textContent = String(state.eggStock);
@@ -2894,6 +2986,12 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const autoSellThreshold = getAutoSellThreshold();
+    if (!state.autoSeller.enabled && state.eggStock >= autoSellThreshold + 2) {
+      refs.nextActionHint.textContent = `Gợi ý: kho cao hơn ${autoSellThreshold} trứng, bật Auto bán để giữ dòng tiền ổn định.`;
+      return;
+    }
+
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const shieldCost = getWeatherShieldCost();
     if (!isWeatherShieldActive() && weather.moodFactor < WEATHER_SHIELD_MIN_MOOD_FACTOR && state.coins >= shieldCost) {
@@ -3166,6 +3264,17 @@ import { getRefs } from './dom.js';
       });
     }
 
+    const autoSellThreshold = getAutoSellThreshold();
+    if (!state.autoSeller.enabled && state.eggStock >= autoSellThreshold + 2) {
+      actions.push({
+        id: 'priority_auto_sell',
+        title: 'Kho trứng đang cao',
+        desc: `Bật Auto bán để xử lý trứng dư từ mốc ${autoSellThreshold} trứng.`,
+        cta: 'Bật auto bán',
+        triggerRef: refs.toggleAutoSellBtn
+      });
+    }
+
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const shieldCost = getWeatherShieldCost();
     if (!isWeatherShieldActive() && weather.moodFactor < WEATHER_SHIELD_MIN_MOOD_FACTOR && state.coins >= shieldCost) {
@@ -3369,6 +3478,7 @@ import { getRefs } from './dom.js';
     renderLuckySpin();
     renderPremiumFeed();
     renderAutoFeeder();
+    renderAutoSellerPanel();
     renderIncubator();
     renderPriorityBoard();
     renderReadyActions();
@@ -4130,6 +4240,40 @@ import { getRefs } from './dom.js';
     showToast(state.autoFeeder.enabled ? 'Đã bật trợ lý tự động' : 'Đã tắt trợ lý tự động');
   });
 
+  if (refs.autoSellThresholdInput) {
+    refs.autoSellThresholdInput.addEventListener('input', () => {
+      const preview = clamp(toSafeNumber(refs.autoSellThresholdInput.value), AUTO_SELL_MIN_THRESHOLD, AUTO_SELL_MAX_THRESHOLD);
+      if (refs.autoSellThresholdValue) {
+        refs.autoSellThresholdValue.textContent = `${preview} trứng`;
+      }
+    });
+
+    refs.autoSellThresholdInput.addEventListener('change', () => {
+      const threshold = clamp(toSafeNumber(refs.autoSellThresholdInput.value), AUTO_SELL_MIN_THRESHOLD, AUTO_SELL_MAX_THRESHOLD);
+      state.autoSeller.threshold = threshold;
+      saveState();
+      updateUI();
+      addLog(`Cập nhật ngưỡng Auto bán: ${threshold} trứng.`);
+      showToast(`Ngưỡng Auto bán: ${threshold} trứng`);
+    });
+  }
+
+  if (refs.toggleAutoSellBtn) {
+    refs.toggleAutoSellBtn.addEventListener('click', () => {
+      const threshold = refs.autoSellThresholdInput
+        ? clamp(toSafeNumber(refs.autoSellThresholdInput.value), AUTO_SELL_MIN_THRESHOLD, AUTO_SELL_MAX_THRESHOLD)
+        : getAutoSellThreshold();
+      state.autoSeller.threshold = threshold;
+      state.autoSeller.enabled = !state.autoSeller.enabled;
+      saveState();
+      updateUI();
+      addLog(state.autoSeller.enabled
+        ? `Đã bật Auto bán trứng (ngưỡng ${threshold}).`
+        : 'Đã tắt Auto bán trứng.');
+      showToast(state.autoSeller.enabled ? 'Auto bán trứng: Bật' : 'Auto bán trứng: Tắt');
+    });
+  }
+
   refs.claimQuestBtn.addEventListener('click', () => {
     const { quest, done } = getQuestProgress();
 
@@ -4185,6 +4329,12 @@ import { getRefs } from './dom.js';
       theme: state.theme,
       soundEnabled: state.soundEnabled,
       autoEggEnabled: state.autoEggEnabled,
+      autoSeller: {
+        enabled: state.autoSeller.enabled,
+        threshold: state.autoSeller.threshold,
+        totalEggsSold: 0,
+        totalCoinsEarned: 0
+      },
       streak: state.streak,
       lastVisitDate: state.lastVisitDate,
       dailyGift: state.dailyGift,
@@ -4255,6 +4405,8 @@ import { getRefs } from './dom.js';
       refs.vipVisitActionBtn.click();
     } else if (key === 'n') {
       refs.mobileTraderActionBtn.click();
+    } else if (key === 's') {
+      refs.toggleAutoSellBtn.click();
     } else if (key === 'y') {
       refs.activateWeatherShieldBtn.click();
     } else if (key === 't') {
@@ -4358,6 +4510,7 @@ import { getRefs } from './dom.js';
     renderIncubator();
     renderCoinMachine();
     renderWholesalePanel();
+    runAutoSellerTick();
     runEggRushTick();
     runFlashOrderTick();
     runVipVisitTick();
@@ -4377,6 +4530,7 @@ import { getRefs } from './dom.js';
   }, 1000);
 
   runWeatherShieldTick();
+  runAutoSellerTick();
   runFlashOrderTick();
   runVipVisitTick();
   runMobileTraderTick();

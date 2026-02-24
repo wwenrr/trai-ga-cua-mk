@@ -696,6 +696,30 @@ button:disabled {
   transition: width 0.2s linear;
 }
 
+.auto-sell-card {
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.95) 0%, rgba(220, 252, 231, 0.84) 100%);
+}
+
+.auto-sell-track {
+  width: 100%;
+  height: 0.62rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(21, 128, 61, 0.17);
+}
+
+.auto-sell-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e 0%, #15803d 100%);
+  transition: width 0.2s linear;
+}
+
+.auto-sell-slider {
+  accent-color: #15803d;
+}
+
 .urgent-timer {
   animation: urgent-pulse 0.8s ease-in-out infinite alternate;
 }
@@ -1288,6 +1312,22 @@ body.night-mode #mobileTraderMeta {
 }
 
 body.night-mode .trader-track {
+  background: rgba(148, 163, 184, 0.24);
+}
+
+body.night-mode .auto-sell-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.82) 100%);
+  border-color: rgba(134, 239, 172, 0.34);
+}
+
+body.night-mode #autoSellHint,
+body.night-mode #autoSellMeta,
+body.night-mode .auto-sell-card label,
+body.night-mode #autoSellThresholdValue {
+  color: #cbd5e1;
+}
+
+body.night-mode .auto-sell-track {
   background: rgba(148, 163, 184, 0.24);
 }
 
