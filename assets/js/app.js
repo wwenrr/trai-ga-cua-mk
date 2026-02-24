@@ -26,6 +26,11 @@ import {
   SANITATION_DANGER_THRESHOLD,
   SANITATION_MOOD_PENALTY_MAX,
   SANITATION_EGG_INTERVAL_PENALTY_MS,
+  VET_CLINIC_COST,
+  VET_CLINIC_DURATION_MS,
+  VET_CLINIC_COOLDOWN_MS,
+  VET_CLINIC_MOOD_BONUS,
+  VET_CLINIC_EGG_INTERVAL_BOOST_MS,
   EGG_RUSH_COST,
   EGG_RUSH_DURATION_MS,
   EGG_RUSH_INTERVAL_FACTOR,
@@ -235,6 +240,42 @@ import { getRefs } from './dom.js';
       botPurchased,
       botEnabled,
       lastBotCleanAt: botEnabled ? toSafeNumber(rawSanitation.lastBotCleanAt) : 0
+    };
+  }
+
+  function normalizeVetClinic(rawClinic) {
+    if (!rawClinic || typeof rawClinic !== 'object') {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        lastUsedAt: 0,
+        used: 0
+      };
+    }
+
+    const active = Boolean(rawClinic.active);
+    const startedAt = toSafeNumber(rawClinic.startedAt);
+    const durationMs = clamp(toSafeNumber(rawClinic.durationMs), 0, 86400000);
+    const lastUsedAt = toSafeNumber(rawClinic.lastUsedAt);
+    const used = toSafeNumber(rawClinic.used);
+
+    if (!active || startedAt <= 0 || durationMs <= 0) {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        lastUsedAt,
+        used
+      };
+    }
+
+    return {
+      active: true,
+      startedAt,
+      durationMs,
+      lastUsedAt,
+      used
     };
   }
 
@@ -644,6 +685,7 @@ import { getRefs } from './dom.js';
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
       autoSeller: normalizeAutoSeller(input.autoSeller),
       sanitation: normalizeSanitation(input.sanitation),
+      vetClinic: normalizeVetClinic(input.vetClinic),
       autoEggEnabled: typeof input.autoEggEnabled === 'boolean' ? input.autoEggEnabled : true,
       eggRush: normalizeEggRush(input.eggRush),
       decorations: normalizeDecorations(input.decorations),
@@ -840,6 +882,77 @@ import { getRefs } from './dom.js';
     return Math.round((dirtiness / 100) * SANITATION_EGG_INTERVAL_PENALTY_MS);
   }
 
+  function isVetClinicActive() {
+    if (!state.vetClinic || !state.vetClinic.active) {
+      return false;
+    }
+
+    const duration = Math.max(1, state.vetClinic.durationMs || VET_CLINIC_DURATION_MS);
+    return Date.now() - state.vetClinic.startedAt < duration;
+  }
+
+  function getVetClinicCooldownRemainingMs() {
+    if (!state.vetClinic || state.vetClinic.lastUsedAt <= 0) {
+      return 0;
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - state.vetClinic.lastUsedAt);
+    return Math.max(0, VET_CLINIC_COOLDOWN_MS - elapsedMs);
+  }
+
+  function getVetClinicProgress() {
+    if (state.vetClinic && state.vetClinic.active) {
+      const durationMs = Math.max(1, state.vetClinic.durationMs || VET_CLINIC_DURATION_MS);
+      const elapsedMs = Math.max(0, Date.now() - state.vetClinic.startedAt);
+      const remainingMs = Math.max(0, durationMs - elapsedMs);
+      return {
+        active: true,
+        ready: remainingMs <= 0,
+        progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+        remainingMs,
+        cooldownRemainingMs: 0
+      };
+    }
+
+    const cooldownRemainingMs = getVetClinicCooldownRemainingMs();
+    return {
+      active: false,
+      ready: cooldownRemainingMs <= 0,
+      progress: VET_CLINIC_COOLDOWN_MS > 0
+        ? clamp(Math.round(((VET_CLINIC_COOLDOWN_MS - cooldownRemainingMs) / VET_CLINIC_COOLDOWN_MS) * 100), 0, 100)
+        : 100,
+      remainingMs: 0,
+      cooldownRemainingMs
+    };
+  }
+
+  function stopVetClinic(completed = false) {
+    if (!state.vetClinic || !state.vetClinic.active) {
+      return false;
+    }
+
+    state.vetClinic.active = false;
+    state.vetClinic.startedAt = 0;
+    state.vetClinic.durationMs = 0;
+    saveState();
+    restartAutoEggTimer();
+
+    if (completed) {
+      addLog('Hiệu lực Trạm thú y đã kết thúc.');
+      showToast('Trạm thú y đã kết thúc');
+    }
+
+    return true;
+  }
+
+  function getVetClinicMoodBonus() {
+    return isVetClinicActive() ? VET_CLINIC_MOOD_BONUS : 0;
+  }
+
+  function getVetClinicEggIntervalBoost() {
+    return isVetClinicActive() ? VET_CLINIC_EGG_INTERVAL_BOOST_MS : 0;
+  }
+
   function getMood() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const base = state.cluckCount * 3
@@ -848,7 +961,8 @@ import { getRefs } from './dom.js';
       + state.hatchCount * 8;
     const decorated = Math.round(base * getEffectiveWeatherMoodFactor(weather))
       + getDecorationMoodBonus()
-      - getSanitationMoodPenalty();
+      - getSanitationMoodPenalty()
+      + getVetClinicMoodBonus();
     return clamp(decorated, 0, 100);
   }
 
@@ -1101,7 +1215,7 @@ import { getRefs } from './dom.js';
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const reduced = getEffectiveWeatherEggInterval(weather) - state.upgrades.eggLevel * 140;
     const sanitationPenalty = getSanitationEggIntervalPenalty();
-    let baseInterval = Math.max(1700, reduced + sanitationPenalty);
+    let baseInterval = Math.max(1700, reduced + sanitationPenalty - getVetClinicEggIntervalBoost());
     baseInterval = Math.max(1300, Math.round(baseInterval * getWindmillIntervalFactor()));
     if (isEggRushRunning()) {
       return Math.max(900, Math.round(baseInterval * EGG_RUSH_INTERVAL_FACTOR));
@@ -2508,6 +2622,56 @@ import { getRefs } from './dom.js';
     updateUI();
   }
 
+  function renderVetClinicPanel() {
+    if (!refs.vetClinicStatus || !refs.vetClinicHint || !refs.vetClinicMeta || !refs.vetClinicProgressBar || !refs.startVetClinicBtn) {
+      return;
+    }
+
+    const progress = getVetClinicProgress();
+    refs.vetClinicMeta.textContent = `Đã kích hoạt ${state.vetClinic.used} lượt • buff mood +${VET_CLINIC_MOOD_BONUS}% và giảm chu kỳ trứng ${VET_CLINIC_EGG_INTERVAL_BOOST_MS}ms.`;
+
+    if (progress.active) {
+      refs.vetClinicProgressBar.style.width = `${progress.progress}%`;
+      refs.vetClinicStatus.textContent = `Trạm thú y đang hoạt động, còn ${Math.ceil(progress.remainingMs / 1000)} giây.`;
+      refs.vetClinicHint.textContent = `Buff đang bật: +${VET_CLINIC_MOOD_BONUS}% mood và tăng tốc sinh trứng tạm thời.`;
+      refs.startVetClinicBtn.disabled = true;
+      refs.startVetClinicBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.startVetClinicBtn.textContent = 'Trạm thú y đang hoạt động';
+      return;
+    }
+
+    if (!progress.ready) {
+      refs.vetClinicProgressBar.style.width = `${progress.progress}%`;
+      refs.vetClinicStatus.textContent = `Trạm thú y đang hồi, còn ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây.`;
+      refs.vetClinicHint.textContent = 'Trong thời gian hồi bạn vẫn có thể dọn chuồng hoặc dùng buff khác.';
+      refs.startVetClinicBtn.disabled = true;
+      refs.startVetClinicBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.startVetClinicBtn.textContent = `Hồi ${Math.ceil(progress.cooldownRemainingMs / 1000)}s`;
+      return;
+    }
+
+    refs.vetClinicProgressBar.style.width = '100%';
+    refs.vetClinicStatus.textContent = 'Trạm thú y đã sẵn sàng kích hoạt.';
+    refs.vetClinicHint.textContent = `Kích hoạt ngay để nhận buff trong ${Math.round(VET_CLINIC_DURATION_MS / 1000)} giây.`;
+
+    const canStart = state.coins >= VET_CLINIC_COST;
+    refs.startVetClinicBtn.disabled = !canStart;
+    refs.startVetClinicBtn.classList.toggle('opacity-60', !canStart);
+    refs.startVetClinicBtn.classList.toggle('cursor-not-allowed', !canStart);
+    refs.startVetClinicBtn.textContent = `Kích hoạt (-${VET_CLINIC_COST} xu)`;
+  }
+
+  function runVetClinicTick() {
+    const progress = getVetClinicProgress();
+    if (!progress.active || !progress.ready) {
+      return;
+    }
+
+    if (stopVetClinic(true)) {
+      updateUI();
+    }
+  }
+
   function getQuickOpsActions() {
     const actions = [];
     const today = getTodayKey();
@@ -2582,6 +2746,15 @@ import { getRefs } from './dom.js';
         id: 'quick_cleaning',
         label: `Dọn chuồng nhanh (${cleanliness}% sạch, -${SANITATION_MANUAL_CLEAN_COST} xu)`,
         triggerRef: refs.cleanNowBtn
+      });
+    }
+
+    const clinicProgress = getVetClinicProgress();
+    if (!clinicProgress.active && clinicProgress.ready && cleanliness <= SANITATION_LOW_THRESHOLD && state.coins >= VET_CLINIC_COST && refs.startVetClinicBtn) {
+      actions.push({
+        id: 'quick_vet_clinic',
+        label: `Bật trạm thú y tăng cường (-${VET_CLINIC_COST} xu)`,
+        triggerRef: refs.startVetClinicBtn
       });
     }
 
@@ -3358,6 +3531,12 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const clinicProgress = getVetClinicProgress();
+    if (!clinicProgress.active && clinicProgress.ready && cleanliness <= SANITATION_LOW_THRESHOLD && state.coins >= VET_CLINIC_COST) {
+      refs.nextActionHint.textContent = `Gợi ý: chuồng đang thấp sạch, bật Trạm thú y (phím I) để hồi nhịp farm nhanh trong ngắn hạn.`;
+      return;
+    }
+
     const autoSellThreshold = getAutoSellThreshold();
     if (!state.autoSeller.enabled && state.eggStock >= autoSellThreshold + 2) {
       refs.nextActionHint.textContent = `Gợi ý: kho cao hơn ${autoSellThreshold} trứng, bật Auto bán để giữ dòng tiền ổn định.`;
@@ -3432,6 +3611,10 @@ import { getRefs } from './dom.js';
 
     if (refs.labSnapWeather) {
       refs.labSnapWeather.textContent = weather.label;
+    }
+
+    if (refs.labSnapCleanliness) {
+      refs.labSnapCleanliness.textContent = `${getCleanliness()}%`;
     }
   }
 
@@ -3666,6 +3849,17 @@ import { getRefs } from './dom.js';
       });
     }
 
+    const clinicProgress = getVetClinicProgress();
+    if (!clinicProgress.active && clinicProgress.ready && cleanliness <= SANITATION_LOW_THRESHOLD && state.coins >= VET_CLINIC_COST) {
+      actions.push({
+        id: 'priority_vet_clinic',
+        title: 'Có thể kích hoạt Trạm thú y',
+        desc: `Buff ngắn hạn giúp kéo mood và tốc độ trứng khi chuồng đang giảm sạch.`,
+        cta: 'Bật trạm',
+        triggerRef: refs.startVetClinicBtn
+      });
+    }
+
     const autoSellThreshold = getAutoSellThreshold();
     if (!state.autoSeller.enabled && state.eggStock >= autoSellThreshold + 2) {
       actions.push({
@@ -3882,6 +4076,7 @@ import { getRefs } from './dom.js';
     renderAutoFeeder();
     renderAutoSellerPanel();
     renderSanitationPanel();
+    renderVetClinicPanel();
     renderQuickOpsPanel();
     renderIncubator();
     renderPriorityBoard();
@@ -4733,6 +4928,39 @@ import { getRefs } from './dom.js';
     });
   }
 
+  if (refs.startVetClinicBtn) {
+    refs.startVetClinicBtn.addEventListener('click', () => {
+      const progress = getVetClinicProgress();
+      if (progress.active && !progress.ready) {
+        showToast(`Trạm thú y đang chạy, còn ${Math.ceil(progress.remainingMs / 1000)} giây`);
+        return;
+      }
+
+      if (!progress.active && !progress.ready) {
+        showToast(`Trạm thú y đang hồi, còn ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây`);
+        return;
+      }
+
+      if (!spendCoins(VET_CLINIC_COST)) {
+        showToast('Không đủ xu để kích hoạt Trạm thú y');
+        return;
+      }
+
+      const now = Date.now();
+      state.vetClinic.active = true;
+      state.vetClinic.startedAt = now;
+      state.vetClinic.durationMs = VET_CLINIC_DURATION_MS;
+      state.vetClinic.lastUsedAt = now;
+      state.vetClinic.used += 1;
+
+      saveState();
+      restartAutoEggTimer();
+      updateUI();
+      addLog(`Kích hoạt Trạm thú y (-${VET_CLINIC_COST} xu) trong ${Math.round(VET_CLINIC_DURATION_MS / 1000)}s.`);
+      showToast('Trạm thú y đã kích hoạt');
+    });
+  }
+
   if (refs.runQuickOpsBtn) {
     refs.runQuickOpsBtn.addEventListener('click', () => {
       runQuickOpsBatch();
@@ -4879,6 +5107,10 @@ import { getRefs } from './dom.js';
       refs.eggRushBtn.click();
     } else if (key === 'v') {
       refs.startFeverBtn.click();
+    } else if (key === 'i') {
+      if (refs.startVetClinicBtn) {
+        refs.startVetClinicBtn.click();
+      }
     } else if (key === 'k') {
       refs.startWholesaleBtn.click();
     } else if (key === 'j') {
@@ -5002,6 +5234,7 @@ import { getRefs } from './dom.js';
     renderWholesalePanel();
     runAutoSellerTick();
     runSanitationTick();
+    runVetClinicTick();
     runEggRushTick();
     runFlashOrderTick();
     runVipVisitTick();
@@ -5023,6 +5256,7 @@ import { getRefs } from './dom.js';
   runWeatherShieldTick();
   runAutoSellerTick();
   runSanitationTick();
+  runVetClinicTick();
   runFlashOrderTick();
   runVipVisitTick();
   runMobileTraderTick();

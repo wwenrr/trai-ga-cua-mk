@@ -740,6 +740,26 @@ button:disabled {
   transition: width 0.2s linear;
 }
 
+.vet-clinic-card {
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.95) 0%, rgba(209, 250, 229, 0.84) 100%);
+}
+
+.vet-clinic-track {
+  width: 100%;
+  height: 0.62rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(5, 150, 105, 0.2);
+}
+
+.vet-clinic-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e 0%, #047857 100%);
+  transition: width 0.2s linear;
+}
+
 .quick-ops-card {
   background: linear-gradient(180deg, rgba(236, 254, 255, 0.95) 0%, rgba(207, 250, 254, 0.86) 100%);
 }
@@ -857,7 +877,7 @@ button:disabled {
   margin-bottom: 1rem;
   display: grid;
   gap: 0.55rem;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .priority-board {
@@ -1410,6 +1430,20 @@ body.night-mode #sanitationMeta {
 }
 
 body.night-mode .sanitation-track {
+  background: rgba(148, 163, 184, 0.24);
+}
+
+body.night-mode .vet-clinic-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.82) 100%);
+  border-color: rgba(134, 239, 172, 0.34);
+}
+
+body.night-mode #vetClinicHint,
+body.night-mode #vetClinicMeta {
+  color: #cbd5e1;
+}
+
+body.night-mode .vet-clinic-track {
   background: rgba(148, 163, 184, 0.24);
 }
 

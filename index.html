@@ -189,6 +189,7 @@
       <div class="snapshot-chip"><span class="snapshot-label">Xu</span><span id="labSnapCoins" class="snapshot-value">0</span></div>
       <div class="snapshot-chip"><span class="snapshot-label">Kho trứng</span><span id="labSnapEggs" class="snapshot-value">0</span></div>
       <div class="snapshot-chip"><span class="snapshot-label">Thời tiết</span><span id="labSnapWeather" class="snapshot-value">Nắng đẹp ☀️</span></div>
+      <div class="snapshot-chip"><span class="snapshot-label">Độ sạch</span><span id="labSnapCleanliness" class="snapshot-value">100%</span></div>
     </div>
     <section class="priority-board farm-panel" aria-label="Bảng việc cần làm ngay">
       <div class="priority-head">
@@ -392,6 +393,17 @@
             </div>
           </section>
 
+          <section class="rounded-2xl border-2 border-emerald-200 p-4 lab-card vet-clinic-card" data-lab-group="automation">
+            <h4 class="text-2xl font-black text-emerald-700">Trạm thú y tăng cường</h4>
+            <p id="vetClinicStatus" class="mt-2 text-lg font-black">Trạm thú y đang ở trạng thái sẵn sàng.</p>
+            <p id="vetClinicHint" class="mt-1 text-base text-slate-700">Kích hoạt để buff mood và tăng tốc trứng trong thời gian ngắn.</p>
+            <p id="vetClinicMeta" class="mt-1 text-sm text-slate-600">Đã kích hoạt 0 lượt hôm nay.</p>
+            <div class="vet-clinic-track mt-3">
+              <div id="vetClinicProgressBar" class="vet-clinic-bar" style="width: 100%;"></div>
+            </div>
+            <button id="startVetClinicBtn" data-action-cta class="mt-4 w-full px-4 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-lg">Kích hoạt trạm thú y</button>
+          </section>
+
           <section class="rounded-2xl border-2 border-cyan-200 p-4 lab-card quick-ops-card lg:col-span-2" data-lab-group="automation">
             <h4 class="text-2xl font-black text-cyan-700">Trung tâm thao tác nhanh</h4>
             <p id="quickOpsStatus" class="mt-2 text-lg font-black">Đang quét tác vụ sẵn sàng...</p>
@@ -557,7 +569,7 @@
         <h4 class="text-2xl font-black text-slate-700 mt-8">Nhật ký hoạt động</h4>
         <ul id="actionLog" class="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1"></ul>
 
-        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, P bật/tắt tự động trứng, Z kích hoạt Mưa Trứng, V bật Lễ Hội Gà, K bán hợp đồng sỉ, J thao tác đơn gấp, U thao tác khách VIP, N thao tác thương nhân lưu động, S bật/tắt auto bán trứng, O dọn chuồng, C chạy trung tâm thao tác nhanh, Y bật Khiên thời tiết, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, L quay may mắn, X dùng cám premium, R thu xu từ máy ủ, H nhận gà con từ lò ấp. Combo nối nhanh trong 6.5 giây giữa các thao tác gọi/cho ăn/nhặt trứng để nhận thưởng mốc. Có dock thao tác nhanh ở cuối màn hình.</p>
+        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, P bật/tắt tự động trứng, Z kích hoạt Mưa Trứng, V bật Lễ Hội Gà, I bật trạm thú y, K bán hợp đồng sỉ, J thao tác đơn gấp, U thao tác khách VIP, N thao tác thương nhân lưu động, S bật/tắt auto bán trứng, O dọn chuồng, C chạy trung tâm thao tác nhanh, Y bật Khiên thời tiết, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, L quay may mắn, X dùng cám premium, R thu xu từ máy ủ, H nhận gà con từ lò ấp. Combo nối nhanh trong 6.5 giây giữa các thao tác gọi/cho ăn/nhặt trứng để nhận thưởng mốc. Có dock thao tác nhanh ở cuối màn hình.</p>
       </div>
     </div>
   </section>

@@ -25,6 +25,11 @@ export const SANITATION_LOW_THRESHOLD = 38;
 export const SANITATION_DANGER_THRESHOLD = 20;
 export const SANITATION_MOOD_PENALTY_MAX = 16;
 export const SANITATION_EGG_INTERVAL_PENALTY_MS = 1100;
+export const VET_CLINIC_COST = 54;
+export const VET_CLINIC_DURATION_MS = 32000;
+export const VET_CLINIC_COOLDOWN_MS = 70000;
+export const VET_CLINIC_MOOD_BONUS = 10;
+export const VET_CLINIC_EGG_INTERVAL_BOOST_MS = 500;
 export const EGG_RUSH_COST = 42;
 export const EGG_RUSH_DURATION_MS = 30000;
 export const EGG_RUSH_INTERVAL_FACTOR = 0.58;
@@ -217,6 +222,13 @@ export const DEFAULT_STATE = {
     botPurchased: false,
     botEnabled: false,
     lastBotCleanAt: 0
+  },
+  vetClinic: {
+    active: false,
+    startedAt: 0,
+    durationMs: 0,
+    lastUsedAt: 0,
+    used: 0
   },
   autoEggEnabled: true,
   eggRush: {
