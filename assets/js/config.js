@@ -74,6 +74,7 @@ export const DEFAULT_STATE = {
   feedCount: 0,
   eggCount: 0,
   eggStock: 0,
+  soldEggCount: 0,
   hatchCount: 0,
   coins: 0,
   streak: 0,
@@ -119,6 +120,7 @@ export const ACHIEVEMENTS = [
   { id: 'cluck_5', label: 'Ca sĩ sân vườn', desc: 'Cục tác ít nhất 5 lần', reward: 16, check: (s) => s.cluckCount >= 5 },
   { id: 'feed_5', label: 'Bếp trưởng', desc: 'Cho ăn ít nhất 5 lần', reward: 18, check: (s) => s.feedCount >= 5 },
   { id: 'egg_3', label: 'Thợ săn trứng', desc: 'Nhặt ít nhất 3 trứng', reward: 20, check: (s) => s.eggCount >= 3 },
+  { id: 'trade_20', label: 'Thương lái mát tay', desc: 'Bán ít nhất 20 trứng tồn kho', reward: 26, check: (s) => s.soldEggCount >= 20 },
   { id: 'hatch_3', label: 'Lò ấp mát tay', desc: 'Ấp nở ít nhất 3 gà con', reward: 24, check: (s) => s.hatchCount >= 3 },
   { id: 'happy_80', label: 'Đàn gà cực vui', desc: 'Đạt mood từ 80%', reward: 25, check: (_, mood) => mood >= 80 },
   { id: 'legend_100', label: 'Huyền thoại trang trại', desc: 'Đạt mood 100%', reward: 35, check: (_, mood) => mood >= 100 }

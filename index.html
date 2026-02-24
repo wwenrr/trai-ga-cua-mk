@@ -114,6 +114,7 @@
         <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Lượt cho ăn: <span id="feedCount">0</span></div>
         <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Trứng nhặt: <span id="eggCount">0</span></div>
         <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Tồn kho trứng: <span id="eggStock">0</span></div>
+        <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Trứng đã bán: <span id="soldEggCount">0</span></div>
         <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Gà con nở: <span id="hatchCount">0</span></div>
         <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Xu: <span id="coinCount">0</span></div>
         <div class="stat-card bg-white/90 px-4 py-2 rounded-full text-amber-700 text-base md:text-lg shadow">Chuỗi ngày: <span id="streakCount">0</span></div>
@@ -273,6 +274,19 @@
             <p class="mt-3 text-base text-slate-700">Mỗi ngày có 1 đơn mới. Giao đủ trứng tồn kho để nhận xu thưởng lớn.</p>
           </section>
 
+          <section class="rounded-2xl border-2 border-teal-200 p-4 lg:col-span-2 lab-card">
+            <h4 class="text-2xl font-black text-teal-700">Quầy bán nhanh trứng</h4>
+            <p id="quickSellPrice" class="mt-2 text-lg font-black">Giá hiện tại: 0 xu/trứng</p>
+            <p id="quickSellStockText" class="mt-1 text-base text-slate-700">Kho hiện có: 0 trứng</p>
+            <p id="quickSellTotalText" class="mt-1 text-base text-slate-700">Đã bán tổng: 0 trứng</p>
+            <div class="mt-4 flex flex-wrap gap-3">
+              <button id="quickSellOneBtn" class="px-5 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-lg">Bán 1 trứng</button>
+              <button id="quickSellFiveBtn" class="px-5 py-3 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-lg">Bán 5 trứng</button>
+              <button id="quickSellAllBtn" class="px-5 py-3 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-lg">Bán tất cả</button>
+            </div>
+            <p class="mt-3 text-base text-slate-700">Giá bán tăng khi thời tiết tốt và nâng cấp trứng cao.</p>
+          </section>
+
           <section class="rounded-2xl border-2 border-amber-200 p-4 lg:col-span-3 lab-card">
             <h4 class="text-2xl font-black text-amber-700">Lò ấp trứng</h4>
             <p id="incubatorStatus" class="mt-2 text-lg font-black">Chưa có trứng nào đang ấp.</p>
@@ -290,7 +304,7 @@
         <h4 class="text-2xl font-black text-slate-700 mt-8">Nhật ký hoạt động</h4>
         <ul id="actionLog" class="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1"></ul>
 
-        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, A bật/tắt trợ lý tự động, G nhận quà điểm danh, H nhận gà con từ lò ấp. Có dock thao tác nhanh ở cuối màn hình.</p>
+        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, H nhận gà con từ lò ấp. Có dock thao tác nhanh ở cuối màn hình.</p>
       </div>
     </div>
   </section>

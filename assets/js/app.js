@@ -178,6 +178,7 @@ import { getRefs } from './dom.js';
       feedCount: toSafeNumber(input.feedCount),
       eggCount,
       eggStock: hasEggStock ? toSafeNumber(input.eggStock) : eggCount,
+      soldEggCount: toSafeNumber(input.soldEggCount),
       hatchCount: toSafeNumber(input.hatchCount),
       coins: toSafeNumber(input.coins),
       streak: toSafeNumber(input.streak),
@@ -563,6 +564,67 @@ import { getRefs } from './dom.js';
     }
   }
 
+  function getQuickSellUnitPrice() {
+    const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
+    const weatherBonus = weather.eggBonus + (state.weather === 'festival' ? 1 : 0);
+    const upgradeBonus = Math.floor(state.upgrades.eggLevel / 2);
+    const streakBonus = Math.min(3, Math.floor(state.streak / 3));
+    return Math.max(3, 4 + weatherBonus + upgradeBonus + streakBonus);
+  }
+
+  function renderQuickSell() {
+    if (!refs.quickSellPrice || !refs.quickSellStockText || !refs.quickSellTotalText || !refs.quickSellOneBtn || !refs.quickSellFiveBtn || !refs.quickSellAllBtn) {
+      return;
+    }
+
+    const unitPrice = getQuickSellUnitPrice();
+    const stock = state.eggStock;
+    refs.quickSellPrice.textContent = `Giá hiện tại: ${unitPrice} xu/trứng`;
+    refs.quickSellStockText.textContent = `Kho hiện có: ${stock} trứng`;
+    refs.quickSellTotalText.textContent = `Đã bán tổng: ${state.soldEggCount} trứng`;
+
+    const canSellOne = stock >= 1;
+    const canSellFive = stock >= 5;
+    const canSellAll = stock >= 1;
+
+    refs.quickSellOneBtn.disabled = !canSellOne;
+    refs.quickSellFiveBtn.disabled = !canSellFive;
+    refs.quickSellAllBtn.disabled = !canSellAll;
+
+    refs.quickSellOneBtn.classList.toggle('opacity-60', !canSellOne);
+    refs.quickSellOneBtn.classList.toggle('cursor-not-allowed', !canSellOne);
+    refs.quickSellFiveBtn.classList.toggle('opacity-60', !canSellFive);
+    refs.quickSellFiveBtn.classList.toggle('cursor-not-allowed', !canSellFive);
+    refs.quickSellAllBtn.classList.toggle('opacity-60', !canSellAll);
+    refs.quickSellAllBtn.classList.toggle('cursor-not-allowed', !canSellAll);
+
+    refs.quickSellOneBtn.textContent = `Bán 1 trứng (+${unitPrice} xu)`;
+    refs.quickSellFiveBtn.textContent = `Bán 5 trứng (+${unitPrice * 5} xu)`;
+    refs.quickSellAllBtn.textContent = canSellAll
+      ? `Bán tất cả (+${unitPrice * stock} xu)`
+      : 'Bán tất cả';
+  }
+
+  function sellEggStock(amount) {
+    const request = toSafeNumber(amount);
+    if (request <= 0 || state.eggStock <= 0) {
+      showToast('Kho trứng trống, chưa thể bán');
+      return;
+    }
+
+    const quantity = Math.min(request, state.eggStock);
+    const unitPrice = getQuickSellUnitPrice();
+    const revenue = quantity * unitPrice;
+
+    state.eggStock -= quantity;
+    state.soldEggCount += quantity;
+    addCoins(revenue);
+    saveState();
+    updateUI();
+    addLog(`Bán nhanh ${quantity} trứng (+${revenue} xu).`);
+    showToast(`Đã bán ${quantity} trứng, +${revenue} xu`);
+  }
+
   function getDailyGiftReward() {
     const coins = 20 + Math.min(state.streak * 4, 56);
     const eggStock = state.streak >= 7 ? 4 : 0;
@@ -882,6 +944,7 @@ import { getRefs } from './dom.js';
     refs.feedCount.textContent = String(state.feedCount);
     refs.eggCount.textContent = String(state.eggCount);
     refs.eggStock.textContent = String(state.eggStock);
+    refs.soldEggCount.textContent = String(state.soldEggCount);
     refs.hatchCount.textContent = String(state.hatchCount);
     refs.coinCount.textContent = String(state.coins);
     refs.streakCount.textContent = String(state.streak);
@@ -905,6 +968,7 @@ import { getRefs } from './dom.js';
     renderWeather();
     renderQuest();
     renderMarketOrder();
+    renderQuickSell();
     renderDailyGift();
     renderAutoFeeder();
     renderIncubator();
@@ -1101,6 +1165,18 @@ import { getRefs } from './dom.js';
     showToast(`Đơn hàng hoàn tất: +${order.reward} xu`);
   });
 
+  refs.quickSellOneBtn.addEventListener('click', () => {
+    sellEggStock(1);
+  });
+
+  refs.quickSellFiveBtn.addEventListener('click', () => {
+    sellEggStock(5);
+  });
+
+  refs.quickSellAllBtn.addEventListener('click', () => {
+    sellEggStock(state.eggStock);
+  });
+
   refs.claimGiftBtn.addEventListener('click', () => {
     const today = getTodayKey();
     if (state.dailyGift.lastClaimDate === today) {
@@ -1295,6 +1371,8 @@ import { getRefs } from './dom.js';
       refs.claimQuestBtn.click();
     } else if (key === 'm') {
       refs.claimOrderBtn.click();
+    } else if (key === 'b') {
+      refs.quickSellAllBtn.click();
     } else if (key === 'a') {
       refs.toggleAutoFeederBtn.click();
     } else if (key === 'g') {
