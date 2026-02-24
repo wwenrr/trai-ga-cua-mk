@@ -7,6 +7,9 @@ import {
   INCUBATOR_COIN_REWARD,
   MARKET_ORDER_MIN_EGGS,
   MARKET_ORDER_MAX_EGGS,
+  AUTO_FEEDER_MAX_LEVEL,
+  AUTO_FEEDER_BASE_INTERVAL_MS,
+  AUTO_FEEDER_MIN_INTERVAL_MS,
   WEATHER_CONFIG,
   QUEST_METRICS,
   DEFAULT_STATE,
@@ -22,6 +25,7 @@ import { getRefs } from './dom.js';
   let autoEggTimer;
   let weatherCycleTimer;
   let incubatorTickTimer;
+  let autoFeederTickTimer;
   let audioCtx;
   const state = loadState();
 
@@ -100,6 +104,26 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeAutoFeeder(rawFeeder) {
+    if (!rawFeeder || typeof rawFeeder !== 'object') {
+      return {
+        level: 0,
+        enabled: false,
+        lastFeedAt: 0
+      };
+    }
+
+    const level = clamp(toSafeNumber(rawFeeder.level), 0, AUTO_FEEDER_MAX_LEVEL);
+    const enabled = Boolean(rawFeeder.enabled) && level > 0;
+    const lastFeedAt = toSafeNumber(rawFeeder.lastFeedAt);
+
+    return {
+      level,
+      enabled,
+      lastFeedAt: level > 0 ? lastFeedAt : 0
+    };
+  }
+
   function normalizeIncubator(rawIncubator) {
     if (!rawIncubator || typeof rawIncubator !== 'object') {
       return {
@@ -153,6 +177,7 @@ import { getRefs } from './dom.js';
         feedLevel: clamp(toSafeNumber(upgrades.feedLevel), 0, MAX_UPGRADE_LEVEL),
         eggLevel: clamp(toSafeNumber(upgrades.eggLevel), 0, MAX_UPGRADE_LEVEL)
       },
+      autoFeeder: normalizeAutoFeeder(input.autoFeeder),
       incubator: normalizeIncubator(input.incubator),
       marketOrder: normalizeMarketOrder(input.marketOrder),
       dailyQuest: normalizeQuest(input.dailyQuest),
@@ -265,6 +290,23 @@ import { getRefs } from './dom.js';
 
   function getEggUpgradeCost() {
     return 40 + state.upgrades.eggLevel * 45;
+  }
+
+  function getAutoFeederUpgradeCost() {
+    return 65 + state.autoFeeder.level * 85;
+  }
+
+  function getAutoFeederInterval() {
+    const reduced = AUTO_FEEDER_BASE_INTERVAL_MS - state.autoFeeder.level * 2200;
+    return Math.max(AUTO_FEEDER_MIN_INTERVAL_MS, reduced);
+  }
+
+  function getAutoFeederFeedPower() {
+    return Math.max(1, Math.ceil(getFeedPower() * 0.7) + Math.floor(state.autoFeeder.level / 2));
+  }
+
+  function getAutoFeederCoinReward() {
+    return 1 + Math.floor(state.autoFeeder.level / 2);
   }
 
   function getEggCoinReward() {
@@ -506,6 +548,92 @@ import { getRefs } from './dom.js';
     }
   }
 
+  function getAutoFeederProgress() {
+    if (state.autoFeeder.level <= 0 || !state.autoFeeder.enabled) {
+      return {
+        active: false,
+        ready: false,
+        progress: 0,
+        remainingMs: 0
+      };
+    }
+
+    const interval = getAutoFeederInterval();
+    const lastFeedAt = state.autoFeeder.lastFeedAt > 0 ? state.autoFeeder.lastFeedAt : Date.now();
+    const elapsedMs = Math.max(0, Date.now() - lastFeedAt);
+    const remainingMs = Math.max(0, interval - elapsedMs);
+
+    return {
+      active: true,
+      ready: remainingMs <= 0,
+      progress: clamp(Math.round((elapsedMs / interval) * 100), 0, 100),
+      remainingMs
+    };
+  }
+
+  function renderAutoFeeder() {
+    if (!refs.autoFeederLevel || !refs.autoFeederStatus || !refs.autoFeederProgressBar || !refs.buyAutoFeederBtn || !refs.toggleAutoFeederBtn) {
+      return;
+    }
+
+    refs.autoFeederLevel.textContent = `Lv${state.autoFeeder.level}`;
+
+    const levelMax = state.autoFeeder.level >= AUTO_FEEDER_MAX_LEVEL;
+    const upgradeCost = getAutoFeederUpgradeCost();
+    refs.buyAutoFeederBtn.disabled = levelMax;
+    refs.buyAutoFeederBtn.classList.toggle('opacity-60', levelMax);
+    refs.buyAutoFeederBtn.classList.toggle('cursor-not-allowed', levelMax);
+    refs.buyAutoFeederBtn.textContent = levelMax ? 'Đã max cấp' : `Nâng cấp (${upgradeCost} xu)`;
+
+    if (state.autoFeeder.level <= 0) {
+      refs.autoFeederStatus.textContent = 'Chưa thuê trợ lý tự động cho ăn.';
+      refs.autoFeederProgressBar.style.width = '0%';
+      refs.buyAutoFeederBtn.textContent = `Thuê trợ lý (${upgradeCost} xu)`;
+      refs.toggleAutoFeederBtn.disabled = true;
+      refs.toggleAutoFeederBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.toggleAutoFeederBtn.textContent = 'Tự động: Tắt';
+      return;
+    }
+
+    refs.toggleAutoFeederBtn.disabled = false;
+    refs.toggleAutoFeederBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+    refs.toggleAutoFeederBtn.textContent = state.autoFeeder.enabled ? 'Tự động: Bật' : 'Tự động: Tắt';
+
+    if (!state.autoFeeder.enabled) {
+      refs.autoFeederStatus.textContent = 'Trợ lý đang tạm nghỉ.';
+      refs.autoFeederProgressBar.style.width = '0%';
+      return;
+    }
+
+    const progress = getAutoFeederProgress();
+    refs.autoFeederProgressBar.style.width = `${progress.progress}%`;
+    refs.autoFeederStatus.textContent = `Đang cho ăn tự động, còn ${Math.ceil(progress.remainingMs / 1000)}s tới lượt tiếp theo.`;
+  }
+
+  function runAutoFeederTick() {
+    if (state.autoFeeder.level <= 0 || !state.autoFeeder.enabled) {
+      return;
+    }
+
+    if (state.autoFeeder.lastFeedAt <= 0) {
+      state.autoFeeder.lastFeedAt = Date.now();
+      saveState();
+      return;
+    }
+
+    const interval = getAutoFeederInterval();
+    const now = Date.now();
+    if (now - state.autoFeeder.lastFeedAt < interval) {
+      return;
+    }
+
+    state.autoFeeder.lastFeedAt = now;
+    state.feedCount += getAutoFeederFeedPower();
+    addCoins(getAutoFeederCoinReward());
+    saveState();
+    updateUI();
+  }
+
   function renderEconomy() {
     refs.coinBalance.textContent = String(state.coins);
     refs.eggStockBalance.textContent = String(state.eggStock);
@@ -728,6 +856,7 @@ import { getRefs } from './dom.js';
     renderWeather();
     renderQuest();
     renderMarketOrder();
+    renderAutoFeeder();
     renderIncubator();
     renderLogs();
   }
@@ -961,6 +1090,47 @@ import { getRefs } from './dom.js';
     showToast(`Nâng cấp trứng thành công (Lv${state.upgrades.eggLevel})`);
   });
 
+  refs.buyAutoFeederBtn.addEventListener('click', () => {
+    if (state.autoFeeder.level >= AUTO_FEEDER_MAX_LEVEL) {
+      showToast('Trợ lý tự động đã đạt mức tối đa');
+      return;
+    }
+
+    const cost = getAutoFeederUpgradeCost();
+    if (!spendCoins(cost)) {
+      showToast('Không đủ xu để nâng cấp trợ lý tự động');
+      return;
+    }
+
+    state.autoFeeder.level += 1;
+    state.autoFeeder.enabled = true;
+    if (state.autoFeeder.lastFeedAt <= 0) {
+      state.autoFeeder.lastFeedAt = Date.now();
+    }
+
+    saveState();
+    updateUI();
+    addLog(`Nâng trợ lý tự động lên Lv${state.autoFeeder.level} (-${cost} xu).`);
+    showToast(`Trợ lý tự động Lv${state.autoFeeder.level} đã sẵn sàng`);
+  });
+
+  refs.toggleAutoFeederBtn.addEventListener('click', () => {
+    if (state.autoFeeder.level <= 0) {
+      showToast('Bạn cần thuê trợ lý trước');
+      return;
+    }
+
+    state.autoFeeder.enabled = !state.autoFeeder.enabled;
+    if (state.autoFeeder.enabled && state.autoFeeder.lastFeedAt <= 0) {
+      state.autoFeeder.lastFeedAt = Date.now();
+    }
+
+    saveState();
+    updateUI();
+    addLog(state.autoFeeder.enabled ? 'Đã bật trợ lý tự động cho ăn.' : 'Đã tắt trợ lý tự động cho ăn.');
+    showToast(state.autoFeeder.enabled ? 'Đã bật trợ lý tự động' : 'Đã tắt trợ lý tự động');
+  });
+
   refs.claimQuestBtn.addEventListener('click', () => {
     const { quest, done } = getQuestProgress();
 
@@ -1033,6 +1203,8 @@ import { getRefs } from './dom.js';
       refs.claimQuestBtn.click();
     } else if (key === 'm') {
       refs.claimOrderBtn.click();
+    } else if (key === 'a') {
+      refs.toggleAutoFeederBtn.click();
     } else if (key === 'h') {
       refs.claimIncubatorBtn.click();
     }
@@ -1106,6 +1278,15 @@ import { getRefs } from './dom.js';
 
   incubatorTickTimer = window.setInterval(() => {
     renderIncubator();
+  }, 1000);
+
+  if (autoFeederTickTimer) {
+    clearInterval(autoFeederTickTimer);
+  }
+
+  autoFeederTickTimer = window.setInterval(() => {
+    runAutoFeederTick();
+    renderAutoFeeder();
   }, 1000);
 
   updateUI();

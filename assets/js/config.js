@@ -6,6 +6,9 @@ export const INCUBATOR_DURATION_MS = 45000;
 export const INCUBATOR_COIN_REWARD = 18;
 export const MARKET_ORDER_MIN_EGGS = 4;
 export const MARKET_ORDER_MAX_EGGS = 12;
+export const AUTO_FEEDER_MAX_LEVEL = 6;
+export const AUTO_FEEDER_BASE_INTERVAL_MS = 22000;
+export const AUTO_FEEDER_MIN_INTERVAL_MS = 7000;
 
 export const WEATHER_CONFIG = {
   sunny: {
@@ -83,6 +86,11 @@ export const DEFAULT_STATE = {
   upgrades: {
     feedLevel: 0,
     eggLevel: 0
+  },
+  autoFeeder: {
+    level: 0,
+    enabled: false,
+    lastFeedAt: 0
   },
   incubator: {
     active: false,

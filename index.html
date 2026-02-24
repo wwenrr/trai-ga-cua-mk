@@ -221,6 +221,17 @@
             </div>
           </section>
 
+          <section class="rounded-2xl border-2 border-lime-200 p-4">
+            <h4 class="text-2xl font-black text-lime-700">Trợ lý tự động</h4>
+            <p class="mt-2 text-lg">Cấp trợ lý: <span id="autoFeederLevel" class="font-black">Lv0</span></p>
+            <p id="autoFeederStatus" class="mt-1 text-base text-slate-700">Chưa thuê trợ lý tự động cho ăn.</p>
+            <div class="mt-3 w-full h-3 rounded-full bg-lime-100 overflow-hidden">
+              <div id="autoFeederProgressBar" class="feeder-bar h-full bg-lime-500" style="width: 0%;"></div>
+            </div>
+            <button id="buyAutoFeederBtn" class="mt-4 w-full px-4 py-3 bg-lime-600 hover:bg-lime-700 text-white rounded-xl text-lg">Thuê trợ lý</button>
+            <button id="toggleAutoFeederBtn" class="mt-3 w-full px-4 py-3 bg-lime-800 hover:bg-lime-900 text-white rounded-xl text-lg">Tự động: Tắt</button>
+          </section>
+
           <section class="rounded-2xl border-2 border-emerald-200 p-4">
             <h4 class="text-2xl font-black text-emerald-700">Nhiệm vụ hôm nay</h4>
             <p id="questTitle" class="mt-2 text-lg font-black">Đang tạo nhiệm vụ...</p>
@@ -268,7 +279,7 @@
         <h4 class="text-2xl font-black text-slate-700 mt-8">Nhật ký hoạt động</h4>
         <ul id="actionLog" class="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1"></ul>
 
-        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, H nhận gà con từ lò ấp.</p>
+        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, A bật/tắt trợ lý tự động, H nhận gà con từ lò ấp.</p>
       </div>
     </div>
   </section>

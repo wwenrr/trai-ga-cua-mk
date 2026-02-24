@@ -34,6 +34,11 @@ export function getRefs() {
     eggUpgradeLevel: document.getElementById('eggUpgradeLevel'),
     buyFeedUpgradeBtn: document.getElementById('buyFeedUpgradeBtn'),
     buyEggUpgradeBtn: document.getElementById('buyEggUpgradeBtn'),
+    autoFeederLevel: document.getElementById('autoFeederLevel'),
+    autoFeederStatus: document.getElementById('autoFeederStatus'),
+    autoFeederProgressBar: document.getElementById('autoFeederProgressBar'),
+    buyAutoFeederBtn: document.getElementById('buyAutoFeederBtn'),
+    toggleAutoFeederBtn: document.getElementById('toggleAutoFeederBtn'),
 
     questTitle: document.getElementById('questTitle'),
     questDesc: document.getElementById('questDesc'),
