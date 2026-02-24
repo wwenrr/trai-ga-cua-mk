@@ -30,6 +30,10 @@ export const VET_CLINIC_DURATION_MS = 32000;
 export const VET_CLINIC_COOLDOWN_MS = 70000;
 export const VET_CLINIC_MOOD_BONUS = 10;
 export const VET_CLINIC_EGG_INTERVAL_BOOST_MS = 500;
+export const MARKETING_COST = 46;
+export const MARKETING_DURATION_MS = 30000;
+export const MARKETING_COOLDOWN_MS = 68000;
+export const MARKETING_SELL_BONUS_PER_EGG = 2;
 export const EGG_RUSH_COST = 42;
 export const EGG_RUSH_DURATION_MS = 30000;
 export const EGG_RUSH_INTERVAL_FACTOR = 0.58;
@@ -229,6 +233,14 @@ export const DEFAULT_STATE = {
     durationMs: 0,
     lastUsedAt: 0,
     used: 0
+  },
+  marketing: {
+    active: false,
+    startedAt: 0,
+    durationMs: 0,
+    lastUsedAt: 0,
+    used: 0,
+    totalBonusCoins: 0
   },
   autoEggEnabled: true,
   eggRush: {

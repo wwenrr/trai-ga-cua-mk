@@ -31,6 +31,10 @@ import {
   VET_CLINIC_COOLDOWN_MS,
   VET_CLINIC_MOOD_BONUS,
   VET_CLINIC_EGG_INTERVAL_BOOST_MS,
+  MARKETING_COST,
+  MARKETING_DURATION_MS,
+  MARKETING_COOLDOWN_MS,
+  MARKETING_SELL_BONUS_PER_EGG,
   EGG_RUSH_COST,
   EGG_RUSH_DURATION_MS,
   EGG_RUSH_INTERVAL_FACTOR,
@@ -276,6 +280,46 @@ import { getRefs } from './dom.js';
       durationMs,
       lastUsedAt,
       used
+    };
+  }
+
+  function normalizeMarketing(rawMarketing) {
+    if (!rawMarketing || typeof rawMarketing !== 'object') {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        lastUsedAt: 0,
+        used: 0,
+        totalBonusCoins: 0
+      };
+    }
+
+    const active = Boolean(rawMarketing.active);
+    const startedAt = toSafeNumber(rawMarketing.startedAt);
+    const durationMs = clamp(toSafeNumber(rawMarketing.durationMs), 0, 86400000);
+    const lastUsedAt = toSafeNumber(rawMarketing.lastUsedAt);
+    const used = toSafeNumber(rawMarketing.used);
+    const totalBonusCoins = toSafeNumber(rawMarketing.totalBonusCoins);
+
+    if (!active || startedAt <= 0 || durationMs <= 0) {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        lastUsedAt,
+        used,
+        totalBonusCoins
+      };
+    }
+
+    return {
+      active: true,
+      startedAt,
+      durationMs,
+      lastUsedAt,
+      used,
+      totalBonusCoins
     };
   }
 
@@ -686,6 +730,7 @@ import { getRefs } from './dom.js';
       autoSeller: normalizeAutoSeller(input.autoSeller),
       sanitation: normalizeSanitation(input.sanitation),
       vetClinic: normalizeVetClinic(input.vetClinic),
+      marketing: normalizeMarketing(input.marketing),
       autoEggEnabled: typeof input.autoEggEnabled === 'boolean' ? input.autoEggEnabled : true,
       eggRush: normalizeEggRush(input.eggRush),
       decorations: normalizeDecorations(input.decorations),
@@ -951,6 +996,88 @@ import { getRefs } from './dom.js';
 
   function getVetClinicEggIntervalBoost() {
     return isVetClinicActive() ? VET_CLINIC_EGG_INTERVAL_BOOST_MS : 0;
+  }
+
+  function isMarketingActive() {
+    if (!state.marketing || !state.marketing.active) {
+      return false;
+    }
+
+    const duration = Math.max(1, state.marketing.durationMs || MARKETING_DURATION_MS);
+    return Date.now() - state.marketing.startedAt < duration;
+  }
+
+  function getMarketingCooldownRemainingMs() {
+    if (!state.marketing || state.marketing.lastUsedAt <= 0) {
+      return 0;
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - state.marketing.lastUsedAt);
+    return Math.max(0, MARKETING_COOLDOWN_MS - elapsedMs);
+  }
+
+  function getMarketingProgress() {
+    if (state.marketing && state.marketing.active) {
+      const durationMs = Math.max(1, state.marketing.durationMs || MARKETING_DURATION_MS);
+      const elapsedMs = Math.max(0, Date.now() - state.marketing.startedAt);
+      const remainingMs = Math.max(0, durationMs - elapsedMs);
+      return {
+        active: true,
+        ready: remainingMs <= 0,
+        progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+        remainingMs,
+        cooldownRemainingMs: 0
+      };
+    }
+
+    const cooldownRemainingMs = getMarketingCooldownRemainingMs();
+    return {
+      active: false,
+      ready: cooldownRemainingMs <= 0,
+      progress: MARKETING_COOLDOWN_MS > 0
+        ? clamp(Math.round(((MARKETING_COOLDOWN_MS - cooldownRemainingMs) / MARKETING_COOLDOWN_MS) * 100), 0, 100)
+        : 100,
+      remainingMs: 0,
+      cooldownRemainingMs
+    };
+  }
+
+  function stopMarketing(completed = false) {
+    if (!state.marketing || !state.marketing.active) {
+      return false;
+    }
+
+    state.marketing.active = false;
+    state.marketing.startedAt = 0;
+    state.marketing.durationMs = 0;
+    saveState();
+
+    if (completed) {
+      addLog('Chiến dịch quảng bá đã kết thúc.');
+      showToast('Chiến dịch quảng bá đã kết thúc');
+    }
+
+    return true;
+  }
+
+  function getMarketingSellBonusPerEgg() {
+    return isMarketingActive() ? MARKETING_SELL_BONUS_PER_EGG : 0;
+  }
+
+  function getMarketingRevenueBonus(quantity) {
+    const safeQuantity = toSafeNumber(quantity);
+    if (safeQuantity <= 0) {
+      return 0;
+    }
+    return safeQuantity * getMarketingSellBonusPerEgg();
+  }
+
+  function addMarketingBonusCoins(quantity) {
+    const bonus = getMarketingRevenueBonus(quantity);
+    if (bonus <= 0) {
+      return;
+    }
+    state.marketing.totalBonusCoins += bonus;
   }
 
   function getMood() {
@@ -1457,7 +1584,8 @@ import { getRefs } from './dom.js';
     const upgradeBonus = Math.floor(state.upgrades.eggLevel / 2);
     const streakBonus = Math.min(3, Math.floor(state.streak / 3));
     const shieldBonus = getWeatherShieldCoinBonus();
-    return Math.max(3, 4 + weatherBonus + upgradeBonus + streakBonus + shieldBonus);
+    const marketingBonus = getMarketingSellBonusPerEgg();
+    return Math.max(3, 4 + weatherBonus + upgradeBonus + streakBonus + shieldBonus + marketingBonus);
   }
 
   function getWholesaleProgress() {
@@ -2090,7 +2218,10 @@ import { getRefs } from './dom.js';
 
     const unitPrice = getQuickSellUnitPrice();
     const stock = state.eggStock;
-    refs.quickSellPrice.textContent = `Giá hiện tại: ${unitPrice} xu/trứng`;
+    const marketingBonus = getMarketingSellBonusPerEgg();
+    refs.quickSellPrice.textContent = marketingBonus > 0
+      ? `Giá hiện tại: ${unitPrice} xu/trứng (đang quảng bá +${marketingBonus})`
+      : `Giá hiện tại: ${unitPrice} xu/trứng`;
     refs.quickSellStockText.textContent = `Kho hiện có: ${stock} trứng`;
     refs.quickSellTotalText.textContent = `Đã bán tổng: ${state.soldEggCount} trứng`;
 
@@ -2310,14 +2441,16 @@ import { getRefs } from './dom.js';
     const quantity = Math.min(request, state.eggStock);
     const unitPrice = getQuickSellUnitPrice();
     const revenue = quantity * unitPrice;
+    const bonusRevenue = getMarketingRevenueBonus(quantity);
 
     state.eggStock -= quantity;
     state.soldEggCount += quantity;
+    addMarketingBonusCoins(quantity);
     addCoins(revenue);
     saveState();
     updateUI();
-    addLog(`Bán nhanh ${quantity} trứng (+${revenue} xu).`);
-    showToast(`Đã bán ${quantity} trứng, +${revenue} xu`);
+    addLog(`Bán nhanh ${quantity} trứng (+${revenue} xu${bonusRevenue > 0 ? `, gồm +${bonusRevenue} xu từ quảng bá` : ''}).`);
+    showToast(`Đã bán ${quantity} trứng, +${revenue} xu${bonusRevenue > 0 ? ` • quảng bá +${bonusRevenue}` : ''}`);
   }
 
   function getDailyGiftReward() {
@@ -2503,6 +2636,7 @@ import { getRefs } from './dom.js';
     state.soldEggCount += quantity;
     state.autoSeller.totalEggsSold += quantity;
     state.autoSeller.totalCoinsEarned += revenue;
+    addMarketingBonusCoins(quantity);
     addCoins(revenue);
     saveState();
     updateUI();
@@ -2672,6 +2806,57 @@ import { getRefs } from './dom.js';
     }
   }
 
+  function renderMarketingPanel() {
+    if (!refs.marketingStatus || !refs.marketingHint || !refs.marketingMeta || !refs.marketingProgressBar || !refs.startMarketingBtn) {
+      return;
+    }
+
+    const progress = getMarketingProgress();
+    const bonusPerEgg = MARKETING_SELL_BONUS_PER_EGG;
+    refs.marketingMeta.textContent = `Đã chạy ${state.marketing.used} lượt • bonus cộng dồn ${state.marketing.totalBonusCoins} xu.`;
+
+    if (progress.active) {
+      refs.marketingProgressBar.style.width = `${progress.progress}%`;
+      refs.marketingStatus.textContent = `Chiến dịch đang chạy, còn ${Math.ceil(progress.remainingMs / 1000)} giây.`;
+      refs.marketingHint.textContent = `Giá trứng đang được cộng +${bonusPerEgg} xu/quả cho mọi giao dịch bán theo giá thị trường.`;
+      refs.startMarketingBtn.disabled = true;
+      refs.startMarketingBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.startMarketingBtn.textContent = 'Chiến dịch đang hoạt động';
+      return;
+    }
+
+    if (!progress.ready) {
+      refs.marketingProgressBar.style.width = `${progress.progress}%`;
+      refs.marketingStatus.textContent = `Chiến dịch đang hồi, còn ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây.`;
+      refs.marketingHint.textContent = 'Trong lúc hồi, ưu tiên tích trứng để tận dụng đợt quảng bá kế tiếp.';
+      refs.startMarketingBtn.disabled = true;
+      refs.startMarketingBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.startMarketingBtn.textContent = `Hồi ${Math.ceil(progress.cooldownRemainingMs / 1000)}s`;
+      return;
+    }
+
+    refs.marketingProgressBar.style.width = '100%';
+    refs.marketingStatus.textContent = 'Chiến dịch đã sẵn sàng kích hoạt.';
+    refs.marketingHint.textContent = `Bật ngay để cộng +${bonusPerEgg} xu/trứng trong ${Math.round(MARKETING_DURATION_MS / 1000)} giây.`;
+
+    const canStart = state.coins >= MARKETING_COST;
+    refs.startMarketingBtn.disabled = !canStart;
+    refs.startMarketingBtn.classList.toggle('opacity-60', !canStart);
+    refs.startMarketingBtn.classList.toggle('cursor-not-allowed', !canStart);
+    refs.startMarketingBtn.textContent = `Bắt đầu quảng bá (-${MARKETING_COST} xu)`;
+  }
+
+  function runMarketingTick() {
+    const progress = getMarketingProgress();
+    if (!progress.active || !progress.ready) {
+      return;
+    }
+
+    if (stopMarketing(true)) {
+      updateUI();
+    }
+  }
+
   function getQuickOpsActions() {
     const actions = [];
     const today = getTodayKey();
@@ -2755,6 +2940,23 @@ import { getRefs } from './dom.js';
         id: 'quick_vet_clinic',
         label: `Bật trạm thú y tăng cường (-${VET_CLINIC_COST} xu)`,
         triggerRef: refs.startVetClinicBtn
+      });
+    }
+
+    const marketingProgress = getMarketingProgress();
+    if (!marketingProgress.active && marketingProgress.ready && state.eggStock >= WHOLESALE_EGG_BATCH && state.coins >= MARKETING_COST && refs.startMarketingBtn) {
+      actions.push({
+        id: 'quick_marketing_start',
+        label: `Bật chiến dịch quảng bá (-${MARKETING_COST} xu)`,
+        triggerRef: refs.startMarketingBtn
+      });
+    }
+
+    if (marketingProgress.active && state.eggStock >= 5 && refs.quickSellFiveBtn) {
+      actions.push({
+        id: 'quick_marketing_sell',
+        label: `Đang quảng bá: bán nhanh 5 trứng để tận dụng giá cao`,
+        triggerRef: refs.quickSellFiveBtn
       });
     }
 
@@ -3478,6 +3680,17 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const marketingProgress = getMarketingProgress();
+    if (!marketingProgress.active && marketingProgress.ready && state.eggStock >= WHOLESALE_EGG_BATCH && state.coins >= MARKETING_COST) {
+      refs.nextActionHint.textContent = `Gợi ý: bật Chiến dịch quảng bá (phím D) trước khi bán để tối đa hóa doanh thu trứng.`;
+      return;
+    }
+
+    if (marketingProgress.active && state.eggStock >= 5) {
+      refs.nextActionHint.textContent = `Gợi ý: chiến dịch quảng bá đang chạy, ưu tiên bán trứng ngay để tận dụng giá cộng thêm.`;
+      return;
+    }
+
     const flashOrderProgress = getFlashOrderProgress();
     if (flashOrderProgress.active && state.eggStock >= state.flashOrder.target) {
       refs.nextActionHint.textContent = `Gợi ý: đơn gấp còn ${Math.ceil(flashOrderProgress.remainingMs / 1000)}s, giao ngay để nhận +${state.flashOrder.reward} xu.`;
@@ -3860,6 +4073,25 @@ import { getRefs } from './dom.js';
       });
     }
 
+    const marketingProgress = getMarketingProgress();
+    if (!marketingProgress.active && marketingProgress.ready && state.eggStock >= WHOLESALE_EGG_BATCH && state.coins >= MARKETING_COST && refs.startMarketingBtn) {
+      actions.push({
+        id: 'priority_marketing_start',
+        title: 'Đủ điều kiện chạy quảng bá',
+        desc: `Bật chiến dịch để cộng thêm ${MARKETING_SELL_BONUS_PER_EGG} xu mỗi trứng bán ra.`,
+        cta: 'Bật quảng bá',
+        triggerRef: refs.startMarketingBtn
+      });
+    } else if (marketingProgress.active && state.eggStock >= 5) {
+      actions.push({
+        id: 'priority_marketing_sell',
+        title: 'Chiến dịch quảng bá đang chạy',
+        desc: 'Ưu tiên bán nhanh hoặc chốt hợp đồng sỉ để tận dụng giá cao.',
+        cta: 'Bán 5 trứng',
+        triggerRef: refs.quickSellFiveBtn
+      });
+    }
+
     const autoSellThreshold = getAutoSellThreshold();
     if (!state.autoSeller.enabled && state.eggStock >= autoSellThreshold + 2) {
       actions.push({
@@ -4077,6 +4309,7 @@ import { getRefs } from './dom.js';
     renderAutoSellerPanel();
     renderSanitationPanel();
     renderVetClinicPanel();
+    renderMarketingPanel();
     renderQuickOpsPanel();
     renderIncubator();
     renderPriorityBoard();
@@ -4420,6 +4653,7 @@ import { getRefs } from './dom.js';
     state.wholesale.lastTradeAt = Date.now();
     state.wholesale.totalTrades += 1;
     state.wholesale.totalEggs += WHOLESALE_EGG_BATCH;
+    addMarketingBonusCoins(WHOLESALE_EGG_BATCH);
     addCoins(payout);
     saveState();
     updateUI();
@@ -4961,6 +5195,37 @@ import { getRefs } from './dom.js';
     });
   }
 
+  if (refs.startMarketingBtn) {
+    refs.startMarketingBtn.addEventListener('click', () => {
+      const progress = getMarketingProgress();
+      if (progress.active && !progress.ready) {
+        showToast(`Chiến dịch đang chạy, còn ${Math.ceil(progress.remainingMs / 1000)} giây`);
+        return;
+      }
+
+      if (!progress.active && !progress.ready) {
+        showToast(`Chiến dịch đang hồi, còn ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây`);
+        return;
+      }
+
+      if (!spendCoins(MARKETING_COST)) {
+        showToast('Không đủ xu để bắt đầu quảng bá');
+        return;
+      }
+
+      const now = Date.now();
+      state.marketing.active = true;
+      state.marketing.startedAt = now;
+      state.marketing.durationMs = MARKETING_DURATION_MS;
+      state.marketing.lastUsedAt = now;
+      state.marketing.used += 1;
+      saveState();
+      updateUI();
+      addLog(`Bật Chiến dịch quảng bá (-${MARKETING_COST} xu) trong ${Math.round(MARKETING_DURATION_MS / 1000)}s.`);
+      showToast('Chiến dịch quảng bá đã khởi chạy');
+    });
+  }
+
   if (refs.runQuickOpsBtn) {
     refs.runQuickOpsBtn.addEventListener('click', () => {
       runQuickOpsBatch();
@@ -5111,6 +5376,10 @@ import { getRefs } from './dom.js';
       if (refs.startVetClinicBtn) {
         refs.startVetClinicBtn.click();
       }
+    } else if (key === 'd') {
+      if (refs.startMarketingBtn) {
+        refs.startMarketingBtn.click();
+      }
     } else if (key === 'k') {
       refs.startWholesaleBtn.click();
     } else if (key === 'j') {
@@ -5235,6 +5504,7 @@ import { getRefs } from './dom.js';
     runAutoSellerTick();
     runSanitationTick();
     runVetClinicTick();
+    runMarketingTick();
     runEggRushTick();
     runFlashOrderTick();
     runVipVisitTick();
@@ -5257,6 +5527,7 @@ import { getRefs } from './dom.js';
   runAutoSellerTick();
   runSanitationTick();
   runVetClinicTick();
+  runMarketingTick();
   runFlashOrderTick();
   runVipVisitTick();
   runMobileTraderTick();
