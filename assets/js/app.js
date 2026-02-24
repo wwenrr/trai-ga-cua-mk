@@ -35,6 +35,9 @@ import {
   MARKETING_DURATION_MS,
   MARKETING_COOLDOWN_MS,
   MARKETING_SELL_BONUS_PER_EGG,
+  PRICE_LOCK_COST,
+  PRICE_LOCK_DURATION_MS,
+  PRICE_LOCK_COOLDOWN_MS,
   EGG_RUSH_COST,
   EGG_RUSH_DURATION_MS,
   EGG_RUSH_INTERVAL_FACTOR,
@@ -320,6 +323,50 @@ import { getRefs } from './dom.js';
       lastUsedAt,
       used,
       totalBonusCoins
+    };
+  }
+
+  function normalizePriceLock(rawPriceLock) {
+    if (!rawPriceLock || typeof rawPriceLock !== 'object') {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        lastUsedAt: 0,
+        used: 0,
+        lockedUnitPrice: 0,
+        totalProtectedSales: 0
+      };
+    }
+
+    const active = Boolean(rawPriceLock.active);
+    const startedAt = toSafeNumber(rawPriceLock.startedAt);
+    const durationMs = clamp(toSafeNumber(rawPriceLock.durationMs), 0, 86400000);
+    const lastUsedAt = toSafeNumber(rawPriceLock.lastUsedAt);
+    const used = toSafeNumber(rawPriceLock.used);
+    const lockedUnitPrice = clamp(toSafeNumber(rawPriceLock.lockedUnitPrice), 0, 9999);
+    const totalProtectedSales = toSafeNumber(rawPriceLock.totalProtectedSales);
+
+    if (!active || startedAt <= 0 || durationMs <= 0 || lockedUnitPrice <= 0) {
+      return {
+        active: false,
+        startedAt: 0,
+        durationMs: 0,
+        lastUsedAt,
+        used,
+        lockedUnitPrice: 0,
+        totalProtectedSales
+      };
+    }
+
+    return {
+      active: true,
+      startedAt,
+      durationMs,
+      lastUsedAt,
+      used,
+      lockedUnitPrice,
+      totalProtectedSales
     };
   }
 
@@ -731,6 +778,7 @@ import { getRefs } from './dom.js';
       sanitation: normalizeSanitation(input.sanitation),
       vetClinic: normalizeVetClinic(input.vetClinic),
       marketing: normalizeMarketing(input.marketing),
+      priceLock: normalizePriceLock(input.priceLock),
       autoEggEnabled: typeof input.autoEggEnabled === 'boolean' ? input.autoEggEnabled : true,
       eggRush: normalizeEggRush(input.eggRush),
       decorations: normalizeDecorations(input.decorations),
@@ -1078,6 +1126,82 @@ import { getRefs } from './dom.js';
       return;
     }
     state.marketing.totalBonusCoins += bonus;
+  }
+
+  function isPriceLockActive() {
+    if (!state.priceLock || !state.priceLock.active) {
+      return false;
+    }
+
+    const duration = Math.max(1, state.priceLock.durationMs || PRICE_LOCK_DURATION_MS);
+    return Date.now() - state.priceLock.startedAt < duration;
+  }
+
+  function getPriceLockCooldownRemainingMs() {
+    if (!state.priceLock || state.priceLock.lastUsedAt <= 0) {
+      return 0;
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - state.priceLock.lastUsedAt);
+    return Math.max(0, PRICE_LOCK_COOLDOWN_MS - elapsedMs);
+  }
+
+  function getPriceLockProgress() {
+    if (state.priceLock && state.priceLock.active) {
+      const durationMs = Math.max(1, state.priceLock.durationMs || PRICE_LOCK_DURATION_MS);
+      const elapsedMs = Math.max(0, Date.now() - state.priceLock.startedAt);
+      const remainingMs = Math.max(0, durationMs - elapsedMs);
+      return {
+        active: true,
+        ready: remainingMs <= 0,
+        progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+        remainingMs,
+        cooldownRemainingMs: 0
+      };
+    }
+
+    const cooldownRemainingMs = getPriceLockCooldownRemainingMs();
+    return {
+      active: false,
+      ready: cooldownRemainingMs <= 0,
+      progress: PRICE_LOCK_COOLDOWN_MS > 0
+        ? clamp(Math.round(((PRICE_LOCK_COOLDOWN_MS - cooldownRemainingMs) / PRICE_LOCK_COOLDOWN_MS) * 100), 0, 100)
+        : 100,
+      remainingMs: 0,
+      cooldownRemainingMs
+    };
+  }
+
+  function stopPriceLock(completed = false) {
+    if (!state.priceLock || !state.priceLock.active) {
+      return false;
+    }
+
+    state.priceLock.active = false;
+    state.priceLock.startedAt = 0;
+    state.priceLock.durationMs = 0;
+    state.priceLock.lockedUnitPrice = 0;
+    saveState();
+
+    if (completed) {
+      addLog('Khóa giá trứng đã hết hiệu lực.');
+      showToast('Khóa giá trứng đã kết thúc');
+    }
+
+    return true;
+  }
+
+  function registerProtectedSale(quantity) {
+    if (!isPriceLockActive()) {
+      return;
+    }
+
+    const safeQuantity = toSafeNumber(quantity);
+    if (safeQuantity <= 0) {
+      return;
+    }
+
+    state.priceLock.totalProtectedSales += safeQuantity;
   }
 
   function getMood() {
@@ -1578,7 +1702,7 @@ import { getRefs } from './dom.js';
     }
   }
 
-  function getQuickSellUnitPrice() {
+  function getLiveQuickSellUnitPrice() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const weatherBonus = weather.eggBonus + (state.weather === 'festival' ? 1 : 0);
     const upgradeBonus = Math.floor(state.upgrades.eggLevel / 2);
@@ -1586,6 +1710,19 @@ import { getRefs } from './dom.js';
     const shieldBonus = getWeatherShieldCoinBonus();
     const marketingBonus = getMarketingSellBonusPerEgg();
     return Math.max(3, 4 + weatherBonus + upgradeBonus + streakBonus + shieldBonus + marketingBonus);
+  }
+
+  function getQuickSellUnitPrice() {
+    const livePrice = getLiveQuickSellUnitPrice();
+    if (!isPriceLockActive()) {
+      return livePrice;
+    }
+
+    const lockedUnitPrice = clamp(toSafeNumber(state.priceLock.lockedUnitPrice), 0, 9999);
+    if (lockedUnitPrice <= 0) {
+      return livePrice;
+    }
+    return lockedUnitPrice;
   }
 
   function getWholesaleProgress() {
@@ -2219,9 +2356,14 @@ import { getRefs } from './dom.js';
     const unitPrice = getQuickSellUnitPrice();
     const stock = state.eggStock;
     const marketingBonus = getMarketingSellBonusPerEgg();
-    refs.quickSellPrice.textContent = marketingBonus > 0
-      ? `Giá hiện tại: ${unitPrice} xu/trứng (đang quảng bá +${marketingBonus})`
-      : `Giá hiện tại: ${unitPrice} xu/trứng`;
+    const lockActive = isPriceLockActive();
+    if (lockActive) {
+      refs.quickSellPrice.textContent = `Giá hiện tại: ${unitPrice} xu/trứng (đã khóa giá)`;
+    } else if (marketingBonus > 0) {
+      refs.quickSellPrice.textContent = `Giá hiện tại: ${unitPrice} xu/trứng (đang quảng bá +${marketingBonus})`;
+    } else {
+      refs.quickSellPrice.textContent = `Giá hiện tại: ${unitPrice} xu/trứng`;
+    }
     refs.quickSellStockText.textContent = `Kho hiện có: ${stock} trứng`;
     refs.quickSellTotalText.textContent = `Đã bán tổng: ${state.soldEggCount} trứng`;
 
@@ -2446,6 +2588,7 @@ import { getRefs } from './dom.js';
     state.eggStock -= quantity;
     state.soldEggCount += quantity;
     addMarketingBonusCoins(quantity);
+    registerProtectedSale(quantity);
     addCoins(revenue);
     saveState();
     updateUI();
@@ -2637,6 +2780,7 @@ import { getRefs } from './dom.js';
     state.autoSeller.totalEggsSold += quantity;
     state.autoSeller.totalCoinsEarned += revenue;
     addMarketingBonusCoins(quantity);
+    registerProtectedSale(quantity);
     addCoins(revenue);
     saveState();
     updateUI();
@@ -2857,6 +3001,57 @@ import { getRefs } from './dom.js';
     }
   }
 
+  function renderPriceLockPanel() {
+    if (!refs.priceLockStatus || !refs.priceLockHint || !refs.priceLockMeta || !refs.priceLockProgressBar || !refs.startPriceLockBtn) {
+      return;
+    }
+
+    const progress = getPriceLockProgress();
+    const liveUnitPrice = getLiveQuickSellUnitPrice();
+    refs.priceLockMeta.textContent = `Đã dùng ${state.priceLock.used} lượt • bán bảo vệ ${state.priceLock.totalProtectedSales} trứng.`;
+
+    if (progress.active) {
+      refs.priceLockProgressBar.style.width = `${progress.progress}%`;
+      refs.priceLockStatus.textContent = `Khóa giá đang hoạt động, còn ${Math.ceil(progress.remainingMs / 1000)} giây.`;
+      refs.priceLockHint.textContent = `Giá đã khóa ở ${state.priceLock.lockedUnitPrice} xu/trứng (giá live hiện tại ${liveUnitPrice}).`;
+      refs.startPriceLockBtn.disabled = true;
+      refs.startPriceLockBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.startPriceLockBtn.textContent = 'Khóa giá đang bật';
+      return;
+    }
+
+    if (!progress.ready) {
+      refs.priceLockProgressBar.style.width = `${progress.progress}%`;
+      refs.priceLockStatus.textContent = `Khóa giá đang hồi, còn ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây.`;
+      refs.priceLockHint.textContent = 'Chờ hết hồi để tiếp tục chốt giá bán trứng ở thời điểm thuận lợi.';
+      refs.startPriceLockBtn.disabled = true;
+      refs.startPriceLockBtn.classList.add('opacity-60', 'cursor-not-allowed');
+      refs.startPriceLockBtn.textContent = `Hồi ${Math.ceil(progress.cooldownRemainingMs / 1000)}s`;
+      return;
+    }
+
+    refs.priceLockProgressBar.style.width = '100%';
+    refs.priceLockStatus.textContent = `Sẵn sàng khóa giá tại mốc ${liveUnitPrice} xu/trứng.`;
+    refs.priceLockHint.textContent = `Khóa giá trong ${Math.round(PRICE_LOCK_DURATION_MS / 1000)}s để chống tụt giá bất ngờ.`;
+
+    const canStart = state.coins >= PRICE_LOCK_COST;
+    refs.startPriceLockBtn.disabled = !canStart;
+    refs.startPriceLockBtn.classList.toggle('opacity-60', !canStart);
+    refs.startPriceLockBtn.classList.toggle('cursor-not-allowed', !canStart);
+    refs.startPriceLockBtn.textContent = `Kích hoạt khóa giá (-${PRICE_LOCK_COST} xu)`;
+  }
+
+  function runPriceLockTick() {
+    const progress = getPriceLockProgress();
+    if (!progress.active || !progress.ready) {
+      return;
+    }
+
+    if (stopPriceLock(true)) {
+      updateUI();
+    }
+  }
+
   function getQuickOpsActions() {
     const actions = [];
     const today = getTodayKey();
@@ -2944,6 +3139,23 @@ import { getRefs } from './dom.js';
     }
 
     const marketingProgress = getMarketingProgress();
+    const priceLockProgress = getPriceLockProgress();
+    if (!priceLockProgress.active && priceLockProgress.ready && state.eggStock >= 8 && state.coins >= PRICE_LOCK_COST && refs.startPriceLockBtn) {
+      actions.push({
+        id: 'quick_price_lock_start',
+        label: `Khóa giá trứng ngay (-${PRICE_LOCK_COST} xu)`,
+        triggerRef: refs.startPriceLockBtn
+      });
+    }
+
+    if (priceLockProgress.active && state.eggStock >= 5 && refs.quickSellFiveBtn) {
+      actions.push({
+        id: 'quick_price_lock_sell',
+        label: 'Khóa giá đang bật: bán nhanh 5 trứng',
+        triggerRef: refs.quickSellFiveBtn
+      });
+    }
+
     if (!marketingProgress.active && marketingProgress.ready && state.eggStock >= WHOLESALE_EGG_BATCH && state.coins >= MARKETING_COST && refs.startMarketingBtn) {
       actions.push({
         id: 'quick_marketing_start',
@@ -3667,6 +3879,17 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const priceLockProgress = getPriceLockProgress();
+    if (priceLockProgress.active && state.eggStock >= 5) {
+      refs.nextActionHint.textContent = 'Gợi ý: khóa giá đang bật, ưu tiên bán trứng ngay để chốt doanh thu ổn định.';
+      return;
+    }
+
+    if (!priceLockProgress.active && priceLockProgress.ready && state.eggStock >= 8 && state.coins >= PRICE_LOCK_COST) {
+      refs.nextActionHint.textContent = `Gợi ý: có thể khóa giá trứng (phím 3) trước khi bán để tránh biến động thị trường.`;
+      return;
+    }
+
     ensureMarketOrder();
     const order = state.marketOrder;
     if (order && !order.claimed && state.eggStock >= order.target) {
@@ -4073,6 +4296,25 @@ import { getRefs } from './dom.js';
       });
     }
 
+    const priceLockProgress = getPriceLockProgress();
+    if (!priceLockProgress.active && priceLockProgress.ready && state.eggStock >= 8 && state.coins >= PRICE_LOCK_COST && refs.startPriceLockBtn) {
+      actions.push({
+        id: 'priority_price_lock_start',
+        title: 'Có thể khóa giá trứng ngay',
+        desc: 'Khóa giá giúp giữ biên lợi nhuận khi thị trường đổi nhanh.',
+        cta: 'Khóa giá',
+        triggerRef: refs.startPriceLockBtn
+      });
+    } else if (priceLockProgress.active && state.eggStock >= 5 && refs.quickSellFiveBtn) {
+      actions.push({
+        id: 'priority_price_lock_sell',
+        title: 'Khóa giá đang hoạt động',
+        desc: 'Tận dụng thời gian khóa để bán nhanh trứng ở mức giá cố định.',
+        cta: 'Bán 5 trứng',
+        triggerRef: refs.quickSellFiveBtn
+      });
+    }
+
     const marketingProgress = getMarketingProgress();
     if (!marketingProgress.active && marketingProgress.ready && state.eggStock >= WHOLESALE_EGG_BATCH && state.coins >= MARKETING_COST && refs.startMarketingBtn) {
       actions.push({
@@ -4310,6 +4552,7 @@ import { getRefs } from './dom.js';
     renderSanitationPanel();
     renderVetClinicPanel();
     renderMarketingPanel();
+    renderPriceLockPanel();
     renderQuickOpsPanel();
     renderIncubator();
     renderPriorityBoard();
@@ -4654,6 +4897,7 @@ import { getRefs } from './dom.js';
     state.wholesale.totalTrades += 1;
     state.wholesale.totalEggs += WHOLESALE_EGG_BATCH;
     addMarketingBonusCoins(WHOLESALE_EGG_BATCH);
+    registerProtectedSale(WHOLESALE_EGG_BATCH);
     addCoins(payout);
     saveState();
     updateUI();
@@ -5226,6 +5470,39 @@ import { getRefs } from './dom.js';
     });
   }
 
+  if (refs.startPriceLockBtn) {
+    refs.startPriceLockBtn.addEventListener('click', () => {
+      const progress = getPriceLockProgress();
+      if (progress.active && !progress.ready) {
+        showToast(`Khóa giá đang chạy, còn ${Math.ceil(progress.remainingMs / 1000)} giây`);
+        return;
+      }
+
+      if (!progress.active && !progress.ready) {
+        showToast(`Khóa giá đang hồi, còn ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây`);
+        return;
+      }
+
+      if (!spendCoins(PRICE_LOCK_COST)) {
+        showToast('Không đủ xu để kích hoạt khóa giá');
+        return;
+      }
+
+      const now = Date.now();
+      const livePrice = getLiveQuickSellUnitPrice();
+      state.priceLock.active = true;
+      state.priceLock.startedAt = now;
+      state.priceLock.durationMs = PRICE_LOCK_DURATION_MS;
+      state.priceLock.lastUsedAt = now;
+      state.priceLock.used += 1;
+      state.priceLock.lockedUnitPrice = livePrice;
+      saveState();
+      updateUI();
+      addLog(`Kích hoạt Khóa giá trứng ở mức ${livePrice} xu/trứng (-${PRICE_LOCK_COST} xu).`);
+      showToast(`Đã khóa giá ${livePrice} xu/trứng`);
+    });
+  }
+
   if (refs.runQuickOpsBtn) {
     refs.runQuickOpsBtn.addEventListener('click', () => {
       runQuickOpsBatch();
@@ -5362,6 +5639,10 @@ import { getRefs } from './dom.js';
       cluck(1);
     } else if (key === '2') {
       cluck(2);
+    } else if (key === '3') {
+      if (refs.startPriceLockBtn) {
+        refs.startPriceLockBtn.click();
+      }
     } else if (key === 'f') {
       refs.feedBtn.click();
     } else if (key === 'e') {
@@ -5505,6 +5786,7 @@ import { getRefs } from './dom.js';
     runSanitationTick();
     runVetClinicTick();
     runMarketingTick();
+    runPriceLockTick();
     runEggRushTick();
     runFlashOrderTick();
     runVipVisitTick();
@@ -5528,6 +5810,7 @@ import { getRefs } from './dom.js';
   runSanitationTick();
   runVetClinicTick();
   runMarketingTick();
+  runPriceLockTick();
   runFlashOrderTick();
   runVipVisitTick();
   runMobileTraderTick();

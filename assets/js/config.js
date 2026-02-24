@@ -34,6 +34,9 @@ export const MARKETING_COST = 46;
 export const MARKETING_DURATION_MS = 30000;
 export const MARKETING_COOLDOWN_MS = 68000;
 export const MARKETING_SELL_BONUS_PER_EGG = 2;
+export const PRICE_LOCK_COST = 32;
+export const PRICE_LOCK_DURATION_MS = 38000;
+export const PRICE_LOCK_COOLDOWN_MS = 76000;
 export const EGG_RUSH_COST = 42;
 export const EGG_RUSH_DURATION_MS = 30000;
 export const EGG_RUSH_INTERVAL_FACTOR = 0.58;
@@ -241,6 +244,15 @@ export const DEFAULT_STATE = {
     lastUsedAt: 0,
     used: 0,
     totalBonusCoins: 0
+  },
+  priceLock: {
+    active: false,
+    startedAt: 0,
+    durationMs: 0,
+    lastUsedAt: 0,
+    used: 0,
+    lockedUnitPrice: 0,
+    totalProtectedSales: 0
   },
   autoEggEnabled: true,
   eggRush: {
