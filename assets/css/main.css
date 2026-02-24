@@ -581,6 +581,26 @@ button:disabled {
   transition: width 0.2s linear;
 }
 
+.wholesale-card {
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.92) 0%, rgba(209, 250, 229, 0.78) 100%);
+}
+
+.wholesale-track {
+  width: 100%;
+  height: 0.62rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(6, 95, 70, 0.18);
+}
+
+.wholesale-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e 0%, #0f766e 100%);
+  transition: width 0.2s linear;
+}
+
 .decor-grid {
   display: grid;
   gap: 0.75rem;
@@ -1096,6 +1116,20 @@ body.night-mode .fever-cost {
 }
 
 body.night-mode .fever-track {
+  background: rgba(148, 163, 184, 0.24);
+}
+
+body.night-mode .wholesale-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.82) 100%);
+  border-color: rgba(110, 231, 183, 0.34);
+}
+
+body.night-mode #wholesaleHint,
+body.night-mode #wholesaleMeta {
+  color: #cbd5e1;
+}
+
+body.night-mode .wholesale-track {
   background: rgba(148, 163, 184, 0.24);
 }
 

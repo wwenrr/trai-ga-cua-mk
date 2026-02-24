@@ -24,6 +24,10 @@ import {
   FEVER_DURATION_MS,
   FEVER_COIN_BONUS,
   FEVER_COMBO_WINDOW_FACTOR,
+  WHOLESALE_EGG_BATCH,
+  WHOLESALE_COOLDOWN_MS,
+  WHOLESALE_BASE_BONUS,
+  WHOLESALE_FEVER_BONUS,
   PREMIUM_FEED_CRAFT_EGGS,
   PREMIUM_FEED_FEED_BONUS,
   PREMIUM_FEED_COIN_BONUS,
@@ -247,6 +251,22 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeWholesale(rawWholesale) {
+    if (!rawWholesale || typeof rawWholesale !== 'object') {
+      return {
+        lastTradeAt: 0,
+        totalTrades: 0,
+        totalEggs: 0
+      };
+    }
+
+    return {
+      lastTradeAt: toSafeNumber(rawWholesale.lastTradeAt),
+      totalTrades: toSafeNumber(rawWholesale.totalTrades),
+      totalEggs: toSafeNumber(rawWholesale.totalEggs)
+    };
+  }
+
   function normalizeDailyGift(rawGift) {
     if (!rawGift || typeof rawGift !== 'object') {
       return {
@@ -385,6 +405,7 @@ import { getRefs } from './dom.js';
       decorations: normalizeDecorations(input.decorations),
       combo: normalizeCombo(input.combo),
       fever: normalizeFever(input.fever),
+      wholesale: normalizeWholesale(input.wholesale),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
       premiumFeed: normalizePremiumFeed(input.premiumFeed),
@@ -981,6 +1002,72 @@ import { getRefs } from './dom.js';
     const upgradeBonus = Math.floor(state.upgrades.eggLevel / 2);
     const streakBonus = Math.min(3, Math.floor(state.streak / 3));
     return Math.max(3, 4 + weatherBonus + upgradeBonus + streakBonus);
+  }
+
+  function getWholesaleProgress() {
+    if (!state.wholesale || state.wholesale.lastTradeAt <= 0) {
+      return {
+        active: false,
+        progress: 100,
+        remainingMs: 0
+      };
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - state.wholesale.lastTradeAt);
+    const remainingMs = Math.max(0, WHOLESALE_COOLDOWN_MS - elapsedMs);
+
+    return {
+      active: remainingMs > 0,
+      progress: clamp(Math.round((elapsedMs / WHOLESALE_COOLDOWN_MS) * 100), 0, 100),
+      remainingMs
+    };
+  }
+
+  function getWholesaleBonus() {
+    const upgradeBonus = state.upgrades.eggLevel * 2;
+    const streakBonus = Math.min(10, state.streak);
+    const feverBonus = isFeverRunning() ? WHOLESALE_FEVER_BONUS : 0;
+    return WHOLESALE_BASE_BONUS + upgradeBonus + streakBonus + feverBonus;
+  }
+
+  function getWholesalePayout() {
+    return getQuickSellUnitPrice() * WHOLESALE_EGG_BATCH + getWholesaleBonus();
+  }
+
+  function renderWholesalePanel() {
+    if (!refs.wholesaleStatus || !refs.wholesaleHint || !refs.wholesaleMeta || !refs.wholesaleProgressBar || !refs.startWholesaleBtn) {
+      return;
+    }
+
+    const progress = getWholesaleProgress();
+    const payout = getWholesalePayout();
+    const canStart = !progress.active && state.eggStock >= WHOLESALE_EGG_BATCH;
+
+    refs.startWholesaleBtn.disabled = !canStart;
+    refs.startWholesaleBtn.classList.toggle('opacity-60', !canStart);
+    refs.startWholesaleBtn.classList.toggle('cursor-not-allowed', !canStart);
+    refs.startWholesaleBtn.textContent = `Bán lô ${WHOLESALE_EGG_BATCH} (+${payout} xu)`;
+
+    refs.wholesaleMeta.textContent = `Đã hoàn thành ${state.wholesale.totalTrades} hợp đồng • tổng ${state.wholesale.totalEggs} trứng.`;
+
+    if (progress.active) {
+      refs.wholesaleStatus.textContent = `Đang chờ làm mới hợp đồng... còn ${Math.ceil(progress.remainingMs / 1000)}s.`;
+      refs.wholesaleHint.textContent = 'Hết hồi chiêu để mở đợt bán lô tiếp theo.';
+      refs.wholesaleProgressBar.style.width = `${progress.progress}%`;
+      return;
+    }
+
+    refs.wholesaleProgressBar.style.width = '100%';
+
+    if (canStart) {
+      refs.wholesaleStatus.textContent = `Sẵn sàng chốt lô ${WHOLESALE_EGG_BATCH} trứng.`;
+      refs.wholesaleHint.textContent = `Payout hiện tại: +${payout} xu (bao gồm bonus +${getWholesaleBonus()} xu).`;
+      return;
+    }
+
+    const missing = WHOLESALE_EGG_BATCH - state.eggStock;
+    refs.wholesaleStatus.textContent = 'Chưa đủ trứng để mở hợp đồng.';
+    refs.wholesaleHint.textContent = `Cần thêm ${missing} trứng để bán theo lô với bonus cao hơn bán lẻ.`;
   }
 
   function renderQuickSell() {
@@ -1889,6 +1976,12 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const wholesaleProgress = getWholesaleProgress();
+    if (!wholesaleProgress.active && state.eggStock >= WHOLESALE_EGG_BATCH) {
+      refs.nextActionHint.textContent = `Gợi ý: đủ ${WHOLESALE_EGG_BATCH} trứng để chốt hợp đồng sỉ, thu xu bonus nhanh.`;
+      return;
+    }
+
     if (state.luckySpin.lastSpinDate !== today) {
       refs.nextActionHint.textContent = 'Gợi ý: thử vòng quay may mắn hôm nay để lấy thêm xu/trứng miễn phí.';
       return;
@@ -2049,6 +2142,18 @@ import { getRefs } from './dom.js';
         desc: `Giao ${order.target} trứng để lấy +${order.reward} xu.`,
         cta: 'Giao ngay',
         triggerRef: refs.claimOrderBtn
+      });
+    }
+
+    const wholesaleProgress = getWholesaleProgress();
+    if (!wholesaleProgress.active && state.eggStock >= WHOLESALE_EGG_BATCH) {
+      const payout = getWholesalePayout();
+      actions.push({
+        id: 'priority_wholesale',
+        title: 'Hợp đồng sỉ đang sẵn sàng',
+        desc: `Bán lô ${WHOLESALE_EGG_BATCH} trứng để nhận +${payout} xu.`,
+        cta: 'Bán lô',
+        triggerRef: refs.startWholesaleBtn
       });
     }
 
@@ -2274,6 +2379,7 @@ import { getRefs } from './dom.js';
     renderComboPanel();
     renderQuest();
     renderMarketOrder();
+    renderWholesalePanel();
     renderQuickSell();
     renderCoinMachine();
     renderDailyGift();
@@ -2604,6 +2710,31 @@ import { getRefs } from './dom.js';
     showToast(`Đơn hàng hoàn tất: +${order.reward} xu`);
   });
 
+  refs.startWholesaleBtn.addEventListener('click', () => {
+    const progress = getWholesaleProgress();
+    if (progress.active) {
+      showToast(`Hợp đồng sỉ đang hồi, còn ${Math.ceil(progress.remainingMs / 1000)} giây`);
+      return;
+    }
+
+    if (state.eggStock < WHOLESALE_EGG_BATCH) {
+      showToast(`Cần thêm ${WHOLESALE_EGG_BATCH - state.eggStock} trứng để bán theo lô`);
+      return;
+    }
+
+    const payout = getWholesalePayout();
+    state.eggStock -= WHOLESALE_EGG_BATCH;
+    state.soldEggCount += WHOLESALE_EGG_BATCH;
+    state.wholesale.lastTradeAt = Date.now();
+    state.wholesale.totalTrades += 1;
+    state.wholesale.totalEggs += WHOLESALE_EGG_BATCH;
+    addCoins(payout);
+    saveState();
+    updateUI();
+    addLog(`Chốt hợp đồng sỉ ${WHOLESALE_EGG_BATCH} trứng, nhận +${payout} xu.`);
+    showToast(`Hợp đồng sỉ thành công: +${payout} xu`);
+  });
+
   refs.quickSellOneBtn.addEventListener('click', () => {
     sellEggStock(1);
   });
@@ -2925,6 +3056,8 @@ import { getRefs } from './dom.js';
       refs.eggRushBtn.click();
     } else if (key === 'v') {
       refs.startFeverBtn.click();
+    } else if (key === 'k') {
+      refs.startWholesaleBtn.click();
     } else if (key === 't') {
       refs.themeToggleBtn.click();
     } else if (key === 'w') {
@@ -3025,6 +3158,7 @@ import { getRefs } from './dom.js';
   incubatorTickTimer = window.setInterval(() => {
     renderIncubator();
     renderCoinMachine();
+    renderWholesalePanel();
     runEggRushTick();
     runFeverTick();
     runComboTick();

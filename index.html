@@ -420,6 +420,17 @@
             <p class="mt-3 text-base text-slate-700">Mỗi ngày có 1 đơn mới. Giao đủ trứng tồn kho để nhận xu thưởng lớn.</p>
           </section>
 
+          <section class="rounded-2xl border-2 border-emerald-200 p-4 lg:col-span-1 lab-card wholesale-card" data-lab-group="economy">
+            <h4 class="text-2xl font-black text-emerald-700">Hợp đồng sỉ</h4>
+            <p id="wholesaleStatus" class="mt-2 text-lg font-black">Sẵn sàng bán lô 10 trứng.</p>
+            <p id="wholesaleHint" class="mt-1 text-base text-slate-700">Bán lô giúp nhận thêm bonus cố định so với bán lẻ.</p>
+            <p id="wholesaleMeta" class="mt-1 text-sm text-slate-600">Đã hoàn thành 0 hợp đồng.</p>
+            <div class="wholesale-track mt-3">
+              <div id="wholesaleProgressBar" class="wholesale-bar" style="width: 0%;"></div>
+            </div>
+            <button id="startWholesaleBtn" data-action-cta class="mt-4 w-full px-4 py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-lg">Bán lô 10 trứng</button>
+          </section>
+
           <section class="rounded-2xl border-2 border-teal-200 p-4 lg:col-span-2 lab-card" data-lab-group="economy">
             <h4 class="text-2xl font-black text-teal-700">Quầy bán nhanh trứng</h4>
             <p id="quickSellPrice" class="mt-2 text-lg font-black">Giá hiện tại: 0 xu/trứng</p>
@@ -430,7 +441,7 @@
               <button id="quickSellFiveBtn" class="px-5 py-3 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-lg">Bán 5 trứng</button>
               <button id="quickSellAllBtn" class="px-5 py-3 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-lg">Bán tất cả</button>
             </div>
-            <p class="mt-3 text-base text-slate-700">Giá bán tăng khi thời tiết tốt và nâng cấp trứng cao.</p>
+            <p class="mt-3 text-base text-slate-700">Giá bán tăng khi thời tiết tốt và nâng cấp trứng cao. Khi đủ số lượng lớn, ưu tiên chốt ở Hợp đồng sỉ để có bonus.</p>
           </section>
 
           <section class="rounded-2xl border-2 border-indigo-200 p-4 lg:col-span-1 lab-card" data-lab-group="economy">
@@ -464,7 +475,7 @@
         <h4 class="text-2xl font-black text-slate-700 mt-8">Nhật ký hoạt động</h4>
         <ul id="actionLog" class="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1"></ul>
 
-        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, P bật/tắt tự động trứng, Z kích hoạt Mưa Trứng, V bật Lễ Hội Gà, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, L quay may mắn, X dùng cám premium, R thu xu từ máy ủ, H nhận gà con từ lò ấp. Combo nối nhanh trong 6.5 giây giữa các thao tác gọi/cho ăn/nhặt trứng để nhận thưởng mốc. Có dock thao tác nhanh ở cuối màn hình.</p>
+        <p class="mt-6 text-base md:text-lg text-slate-700">Phím tắt: 1 gọi gà 1, 2 gọi gà 2, F cho ăn, E thả trứng, P bật/tắt tự động trứng, Z kích hoạt Mưa Trứng, V bật Lễ Hội Gà, K bán hợp đồng sỉ, T đổi ngày/đêm, W đổi thời tiết, Q nhận thưởng nhiệm vụ, M giao đơn thương lái, B bán tất cả trứng tồn kho, A bật/tắt trợ lý tự động, G nhận quà điểm danh, L quay may mắn, X dùng cám premium, R thu xu từ máy ủ, H nhận gà con từ lò ấp. Combo nối nhanh trong 6.5 giây giữa các thao tác gọi/cho ăn/nhặt trứng để nhận thưởng mốc. Có dock thao tác nhanh ở cuối màn hình.</p>
       </div>
     </div>
   </section>

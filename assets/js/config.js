@@ -61,6 +61,10 @@ export const FEVER_COST_EGGS = 2;
 export const FEVER_DURATION_MS = 28000;
 export const FEVER_COIN_BONUS = 2;
 export const FEVER_COMBO_WINDOW_FACTOR = 1.4;
+export const WHOLESALE_EGG_BATCH = 10;
+export const WHOLESALE_COOLDOWN_MS = 25000;
+export const WHOLESALE_BASE_BONUS = 10;
+export const WHOLESALE_FEVER_BONUS = 12;
 export const PREMIUM_FEED_CRAFT_EGGS = 3;
 export const PREMIUM_FEED_FEED_BONUS = 8;
 export const PREMIUM_FEED_COIN_BONUS = 6;
@@ -180,6 +184,11 @@ export const DEFAULT_STATE = {
     startedAt: 0,
     durationMs: 0,
     used: 0
+  },
+  wholesale: {
+    lastTradeAt: 0,
+    totalTrades: 0,
+    totalEggs: 0
   },
   dailyGift: {
     lastClaimDate: '',
