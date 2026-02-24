@@ -37,6 +37,7 @@ import { getRefs } from './dom.js';
   const statPulseTimers = new WeakMap();
   const statTextCache = new Map();
   let activeLabFilter = 'all';
+  let priorityActionMap = new Map();
 
   function toSafeNumber(value) {
     const n = Number(value);
@@ -1382,6 +1383,163 @@ import { getRefs } from './dom.js';
     applyLabFilter(activeLabFilter);
   }
 
+  function getPriorityActions() {
+    const actions = [];
+    const today = getTodayKey();
+    const { quest, done } = getQuestProgress();
+
+    if (!quest.claimed && done) {
+      actions.push({
+        id: 'priority_quest',
+        title: 'Nhiệm vụ ngày đã hoàn thành',
+        desc: `Nhận ngay +${quest.reward} xu.`,
+        cta: 'Nhận thưởng',
+        triggerRef: refs.claimQuestBtn
+      });
+    }
+
+    if (state.dailyGift.lastClaimDate !== today) {
+      const reward = getDailyGiftReward();
+      actions.push({
+        id: 'priority_gift',
+        title: 'Quà điểm danh đang chờ',
+        desc: `Nhận +${reward.coins} xu${reward.eggStock > 0 ? `, +${reward.eggStock} trứng` : ''}.`,
+        cta: 'Nhận quà',
+        triggerRef: refs.claimGiftBtn
+      });
+    }
+
+    ensureMarketOrder();
+    const order = state.marketOrder;
+    if (order && !order.claimed && state.eggStock >= order.target) {
+      actions.push({
+        id: 'priority_order',
+        title: 'Đơn thương lái đã đủ hàng',
+        desc: `Giao ${order.target} trứng để lấy +${order.reward} xu.`,
+        cta: 'Giao ngay',
+        triggerRef: refs.claimOrderBtn
+      });
+    }
+
+    const machineProgress = getCoinMachineProgress();
+    if (machineProgress.active && machineProgress.ready) {
+      actions.push({
+        id: 'priority_coin_machine',
+        title: 'Máy ủ xu đã hoàn tất',
+        desc: `Thu về +${state.coinMachine.payout} xu.`,
+        cta: 'Thu xu',
+        triggerRef: refs.claimCoinMachineBtn
+      });
+    }
+
+    const incubatorProgress = getIncubatorProgress();
+    if (incubatorProgress.active && incubatorProgress.ready) {
+      actions.push({
+        id: 'priority_incubator',
+        title: 'Lò ấp đã nở trứng',
+        desc: `Nhận gà con và +${INCUBATOR_COIN_REWARD} xu.`,
+        cta: 'Nhận gà con',
+        triggerRef: refs.claimIncubatorBtn
+      });
+    }
+
+    if (state.luckySpin.lastSpinDate !== today) {
+      actions.push({
+        id: 'priority_spin',
+        title: 'Bạn chưa quay may mắn hôm nay',
+        desc: 'Thêm cơ hội lấy xu hoặc trứng miễn phí.',
+        cta: 'Quay ngay',
+        triggerRef: refs.luckySpinBtn
+      });
+    }
+
+    if (state.autoFeeder.level > 0 && !state.autoFeeder.enabled) {
+      actions.push({
+        id: 'priority_feeder',
+        title: 'Trợ lý tự động đang tắt',
+        desc: 'Bật lại để đàn gà tiếp tục được chăm đều.',
+        cta: 'Bật trợ lý',
+        triggerRef: refs.toggleAutoFeederBtn
+      });
+    }
+
+    return actions;
+  }
+
+  function renderPriorityBoard() {
+    if (!refs.priorityStatus || !refs.priorityList) {
+      return;
+    }
+
+    const actions = getPriorityActions();
+    priorityActionMap = new Map(actions.map((item) => [item.id, item]));
+    refs.priorityList.innerHTML = '';
+
+    if (actions.length === 0) {
+      refs.priorityStatus.textContent = 'Không có việc gấp. Tiếp tục nuôi đàn và tích tài nguyên.';
+      const empty = document.createElement('li');
+      empty.className = 'priority-empty';
+      empty.textContent = 'Mọi thứ đang ổn định. Bạn có thể cho ăn hoặc nhặt trứng để tăng tốc phát triển.';
+      refs.priorityList.appendChild(empty);
+      return;
+    }
+
+    refs.priorityStatus.textContent = `${actions.length} việc có thể làm ngay để tăng hiệu suất.`;
+    actions.slice(0, 4).forEach((item, idx) => {
+      const li = document.createElement('li');
+      li.className = 'priority-item';
+
+      const content = document.createElement('div');
+      content.className = 'priority-content';
+
+      const title = document.createElement('p');
+      title.className = 'priority-item-title';
+      title.textContent = `${idx + 1}. ${item.title}`;
+
+      const desc = document.createElement('p');
+      desc.className = 'priority-item-desc';
+      desc.textContent = item.desc;
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'priority-btn';
+      button.dataset.priorityId = item.id;
+      button.textContent = item.cta;
+
+      content.appendChild(title);
+      content.appendChild(desc);
+      li.appendChild(content);
+      li.appendChild(button);
+      refs.priorityList.appendChild(li);
+    });
+  }
+
+  function bindPriorityBoard() {
+    if (!refs.priorityList) {
+      return;
+    }
+
+    refs.priorityList.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-priority-id]');
+      if (!button) {
+        return;
+      }
+
+      const priorityId = button.getAttribute('data-priority-id') || '';
+      const action = priorityActionMap.get(priorityId);
+      if (!action || !action.triggerRef) {
+        return;
+      }
+
+      if (action.triggerRef.disabled) {
+        showToast('Hành động này hiện chưa sẵn sàng');
+        return;
+      }
+
+      action.triggerRef.click();
+    });
+  }
+
   function updateUI() {
     const mood = getMood();
     if (mood > state.bestMood) {
@@ -1429,6 +1587,7 @@ import { getRefs } from './dom.js';
     renderPremiumFeed();
     renderAutoFeeder();
     renderIncubator();
+    renderPriorityBoard();
     renderReadyActions();
     renderLogs();
   }
@@ -1496,6 +1655,7 @@ import { getRefs } from './dom.js';
   bindChickenSvgButtons();
   bindLabFilters();
   bindLabShortcutButtons();
+  bindPriorityBoard();
 
   refs.saveNameBtn.addEventListener('click', () => {
     const oldName = state.visitorName;

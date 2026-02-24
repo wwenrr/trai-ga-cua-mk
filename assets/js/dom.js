@@ -19,6 +19,8 @@ export function getRefs() {
     labSnapCoins: document.getElementById('labSnapCoins'),
     labSnapEggs: document.getElementById('labSnapEggs'),
     labSnapWeather: document.getElementById('labSnapWeather'),
+    priorityStatus: document.getElementById('priorityStatus'),
+    priorityList: document.getElementById('priorityList'),
     welcomeMessage: document.getElementById('welcomeMessage'),
 
     visitorName: document.getElementById('visitorName'),
