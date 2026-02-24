@@ -40,6 +40,14 @@ import {
   FLASH_ORDER_BASE_REWARD,
   FLASH_ORDER_REWARD_PER_EGG,
   FLASH_ORDER_FEVER_REWARD_BONUS,
+  VIP_VISIT_COOLDOWN_MS,
+  VIP_VISIT_DURATION_MS,
+  VIP_VISIT_TARGET_MIN,
+  VIP_VISIT_TARGET_MAX,
+  VIP_VISIT_BASE_REWARD,
+  VIP_VISIT_REWARD_PER_STEP,
+  VIP_VISIT_FEVER_REWARD_BONUS,
+  VIP_VISIT_EGG_BONUS_THRESHOLD,
   PREMIUM_FEED_CRAFT_EGGS,
   PREMIUM_FEED_FEED_BONUS,
   PREMIUM_FEED_COIN_BONUS,
@@ -344,6 +352,56 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizeVipVisit(rawVisit) {
+    if (!rawVisit || typeof rawVisit !== 'object') {
+      return {
+        active: false,
+        metric: 'cluckCount',
+        target: 0,
+        rewardCoins: 0,
+        rewardEggStock: 0,
+        startedAt: 0,
+        durationMs: 0,
+        startCounts: {
+          cluckCount: 0,
+          feedCount: 0,
+          eggCount: 0
+        },
+        lastVisitAt: 0,
+        completed: 0,
+        failed: 0
+      };
+    }
+
+    const metric = pickMetric(rawVisit.metric);
+    const startCounts = rawVisit.startCounts && typeof rawVisit.startCounts === 'object' ? rawVisit.startCounts : {};
+    const active = Boolean(rawVisit.active);
+    const target = clamp(toSafeNumber(rawVisit.target), 0, 9999);
+    const rewardCoins = clamp(toSafeNumber(rawVisit.rewardCoins), 0, 99999);
+    const rewardEggStock = clamp(toSafeNumber(rawVisit.rewardEggStock), 0, 9999);
+    const startedAt = toSafeNumber(rawVisit.startedAt);
+    const durationMs = clamp(toSafeNumber(rawVisit.durationMs), 0, 86400000);
+    const hasValidActiveVisit = active && target > 0 && rewardCoins > 0 && startedAt > 0 && durationMs > 0;
+
+    return {
+      active: hasValidActiveVisit,
+      metric,
+      target: hasValidActiveVisit ? target : 0,
+      rewardCoins: hasValidActiveVisit ? rewardCoins : 0,
+      rewardEggStock: hasValidActiveVisit ? rewardEggStock : 0,
+      startedAt: hasValidActiveVisit ? startedAt : 0,
+      durationMs: hasValidActiveVisit ? durationMs : 0,
+      startCounts: {
+        cluckCount: toSafeNumber(startCounts.cluckCount),
+        feedCount: toSafeNumber(startCounts.feedCount),
+        eggCount: toSafeNumber(startCounts.eggCount)
+      },
+      lastVisitAt: toSafeNumber(rawVisit.lastVisitAt),
+      completed: toSafeNumber(rawVisit.completed),
+      failed: toSafeNumber(rawVisit.failed)
+    };
+  }
+
   function normalizeDailyGift(rawGift) {
     if (!rawGift || typeof rawGift !== 'object') {
       return {
@@ -485,6 +543,7 @@ import { getRefs } from './dom.js';
       wholesale: normalizeWholesale(input.wholesale),
       weatherShield: normalizeWeatherShield(input.weatherShield),
       flashOrder: normalizeFlashOrder(input.flashOrder),
+      vipVisit: normalizeVipVisit(input.vipVisit),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
       premiumFeed: normalizePremiumFeed(input.premiumFeed),
@@ -1283,8 +1342,10 @@ import { getRefs } from './dom.js';
     if (progress.active) {
       const missing = Math.max(0, state.flashOrder.target - state.eggStock);
       const canClaim = missing <= 0;
+      const urgent = progress.remainingMs <= 10000;
 
       refs.flashOrderStatus.textContent = `Đơn gấp còn ${Math.ceil(progress.remainingMs / 1000)}s: giao ${state.flashOrder.target} trứng.`;
+      refs.flashOrderStatus.classList.toggle('urgent-timer', urgent);
       refs.flashOrderHint.textContent = canClaim
         ? `Kho đã đủ hàng, giao ngay để nhận +${state.flashOrder.reward} xu.`
         : `Cần thêm ${missing} trứng để chốt đơn trước khi hết giờ.`;
@@ -1306,6 +1367,7 @@ import { getRefs } from './dom.js';
 
     if (canGenerate) {
       refs.flashOrderStatus.textContent = 'Sẵn sàng nhận đơn gấp mới.';
+      refs.flashOrderStatus.classList.remove('urgent-timer');
       refs.flashOrderHint.textContent = `Nhận đơn mới để mở thử thách giao trứng trong ${Math.round(FLASH_ORDER_DURATION_MS / 1000)}s.`;
       refs.flashOrderActionBtn.textContent = 'Nhận đơn gấp';
       refs.flashOrderProgressBar.style.width = '100%';
@@ -1313,6 +1375,7 @@ import { getRefs } from './dom.js';
     }
 
     refs.flashOrderStatus.textContent = `Đang làm mới đơn gấp... còn ${Math.ceil(progress.cooldownRemainingMs / 1000)}s.`;
+    refs.flashOrderStatus.classList.remove('urgent-timer');
     refs.flashOrderHint.textContent = `Mỗi đơn có hồi chiêu ${Math.round(FLASH_ORDER_COOLDOWN_MS / 1000)}s trước khi nhận lượt mới.`;
     refs.flashOrderActionBtn.textContent = 'Đang hồi đơn';
     refs.flashOrderProgressBar.style.width = `${progress.progress}%`;
@@ -1332,6 +1395,187 @@ import { getRefs } from './dom.js';
     }
 
     renderFlashOrderPanel();
+  }
+
+  function getVipVisitCooldownRemainingMs() {
+    if (!state.vipVisit || state.vipVisit.lastVisitAt <= 0) {
+      return 0;
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - state.vipVisit.lastVisitAt);
+    return Math.max(0, VIP_VISIT_COOLDOWN_MS - elapsedMs);
+  }
+
+  function canStartVipVisit() {
+    return !state.vipVisit.active && getVipVisitCooldownRemainingMs() <= 0;
+  }
+
+  function clearVipVisitState() {
+    state.vipVisit.active = false;
+    state.vipVisit.metric = 'cluckCount';
+    state.vipVisit.target = 0;
+    state.vipVisit.rewardCoins = 0;
+    state.vipVisit.rewardEggStock = 0;
+    state.vipVisit.startedAt = 0;
+    state.vipVisit.durationMs = 0;
+    state.vipVisit.startCounts = {
+      cluckCount: 0,
+      feedCount: 0,
+      eggCount: 0
+    };
+  }
+
+  function createVipVisitOffer() {
+    const metrics = Object.keys(QUEST_METRICS);
+    const metric = metrics[Math.floor(Math.random() * metrics.length)] || 'cluckCount';
+    const rawTarget = VIP_VISIT_TARGET_MIN + Math.floor(Math.random() * (VIP_VISIT_TARGET_MAX - VIP_VISIT_TARGET_MIN + 1));
+    const streakBoost = Math.min(2, Math.floor(state.streak / 7));
+    const upgradeBoost = Math.min(1, Math.floor((state.upgrades.feedLevel + state.upgrades.eggLevel) / 10));
+    const target = clamp(rawTarget + streakBoost + upgradeBoost, VIP_VISIT_TARGET_MIN, VIP_VISIT_TARGET_MAX);
+
+    const moodBonus = Math.floor(getMood() / 10);
+    const eggBonusFromTask = target >= VIP_VISIT_EGG_BONUS_THRESHOLD ? 1 : 0;
+    const feverCoinBonus = isFeverRunning() ? VIP_VISIT_FEVER_REWARD_BONUS : 0;
+    const rewardCoins = VIP_VISIT_BASE_REWARD + target * VIP_VISIT_REWARD_PER_STEP + moodBonus + feverCoinBonus;
+    const rewardEggStock = eggBonusFromTask + (state.streak >= 10 ? 1 : 0);
+
+    return {
+      metric,
+      target,
+      rewardCoins,
+      rewardEggStock
+    };
+  }
+
+  function getVipVisitProgress() {
+    if (!state.vipVisit.active) {
+      const cooldownRemainingMs = getVipVisitCooldownRemainingMs();
+      const cooldownProgress = VIP_VISIT_COOLDOWN_MS > 0
+        ? clamp(Math.round(((VIP_VISIT_COOLDOWN_MS - cooldownRemainingMs) / VIP_VISIT_COOLDOWN_MS) * 100), 0, 100)
+        : 100;
+
+      return {
+        active: false,
+        ready: cooldownRemainingMs <= 0,
+        progress: cooldownProgress,
+        remainingMs: 0,
+        cooldownRemainingMs,
+        metric: 'cluckCount',
+        target: 0,
+        current: 0,
+        done: false,
+        taskPercent: 0
+      };
+    }
+
+    const durationMs = Math.max(1, state.vipVisit.durationMs || VIP_VISIT_DURATION_MS);
+    const elapsedMs = Math.max(0, Date.now() - state.vipVisit.startedAt);
+    const remainingMs = Math.max(0, durationMs - elapsedMs);
+    const metric = pickMetric(state.vipVisit.metric);
+    const startValue = state.vipVisit.startCounts && Number.isFinite(state.vipVisit.startCounts[metric])
+      ? state.vipVisit.startCounts[metric]
+      : 0;
+    const current = Math.max(0, toSafeNumber(state[metric]) - startValue);
+    const target = Math.max(1, state.vipVisit.target);
+    const done = current >= target;
+
+    return {
+      active: true,
+      ready: remainingMs <= 0,
+      progress: clamp(Math.round((elapsedMs / durationMs) * 100), 0, 100),
+      remainingMs,
+      cooldownRemainingMs: getVipVisitCooldownRemainingMs(),
+      metric,
+      target,
+      current,
+      done,
+      taskPercent: clamp(Math.round((Math.min(target, current) / target) * 100), 0, 100)
+    };
+  }
+
+  function expireVipVisit(showFeedback = false) {
+    if (!state.vipVisit.active) {
+      return false;
+    }
+
+    const config = QUEST_METRICS[state.vipVisit.metric] || QUEST_METRICS.cluckCount;
+    state.vipVisit.failed += 1;
+    clearVipVisitState();
+    saveState();
+
+    if (showFeedback) {
+      addLog(`Khách VIP rời trại vì quá giờ thử thách ${config.label.toLowerCase()}.`);
+      showToast('Khách VIP đã rời đi');
+    }
+
+    return true;
+  }
+
+  function renderVipVisitPanel() {
+    if (!refs.vipVisitStatus || !refs.vipVisitHint || !refs.vipVisitMeta || !refs.vipVisitProgressBar || !refs.vipVisitActionBtn) {
+      return;
+    }
+
+    const progress = getVipVisitProgress();
+    refs.vipVisitMeta.textContent = `Đã phục vụ ${state.vipVisit.completed} lượt • lỡ ${state.vipVisit.failed} lượt.`;
+
+    if (progress.active) {
+      const config = QUEST_METRICS[progress.metric] || QUEST_METRICS.cluckCount;
+      const missing = Math.max(0, progress.target - progress.current);
+      const canClaim = progress.done;
+      const urgent = progress.remainingMs <= 10000;
+      const rewardText = `+${state.vipVisit.rewardCoins} xu${state.vipVisit.rewardEggStock > 0 ? `, +${state.vipVisit.rewardEggStock} trứng` : ''}`;
+
+      refs.vipVisitStatus.textContent = `${config.icon} Khách VIP còn ${Math.ceil(progress.remainingMs / 1000)}s: ${config.label.toLowerCase()} ${progress.target} ${config.unit}.`;
+      refs.vipVisitStatus.classList.toggle('urgent-timer', urgent);
+      refs.vipVisitHint.textContent = canClaim
+        ? `Đã đạt yêu cầu, nhận thưởng ${rewardText}.`
+        : `Tiến độ ${progress.current}/${progress.target} ${config.unit}, cần thêm ${missing} ${config.unit}.`;
+      refs.vipVisitProgressBar.style.width = `${progress.taskPercent}%`;
+
+      refs.vipVisitActionBtn.disabled = !canClaim;
+      refs.vipVisitActionBtn.classList.toggle('opacity-60', !canClaim);
+      refs.vipVisitActionBtn.classList.toggle('cursor-not-allowed', !canClaim);
+      refs.vipVisitActionBtn.textContent = canClaim
+        ? `Nhận thưởng (${rewardText})`
+        : `Thiếu ${missing} ${config.unit}`;
+      return;
+    }
+
+    const canStart = canStartVipVisit();
+    refs.vipVisitStatus.classList.remove('urgent-timer');
+    refs.vipVisitActionBtn.disabled = !canStart;
+    refs.vipVisitActionBtn.classList.toggle('opacity-60', !canStart);
+    refs.vipVisitActionBtn.classList.toggle('cursor-not-allowed', !canStart);
+
+    if (canStart) {
+      refs.vipVisitStatus.textContent = 'Sẵn sàng mời khách VIP.';
+      refs.vipVisitHint.textContent = `Mỗi lượt kéo dài ${Math.round(VIP_VISIT_DURATION_MS / 1000)}s, hoàn thành thử thách để lấy xu và trứng thưởng.`;
+      refs.vipVisitProgressBar.style.width = '100%';
+      refs.vipVisitActionBtn.textContent = 'Mời khách VIP';
+      return;
+    }
+
+    refs.vipVisitStatus.textContent = `Khách VIP sẽ quay lại sau ${Math.ceil(progress.cooldownRemainingMs / 1000)}s.`;
+    refs.vipVisitHint.textContent = `Mỗi lượt có hồi ${Math.round(VIP_VISIT_COOLDOWN_MS / 1000)}s để cân bằng nhịp phần thưởng.`;
+    refs.vipVisitProgressBar.style.width = `${progress.progress}%`;
+    refs.vipVisitActionBtn.textContent = 'Đang chờ khách';
+  }
+
+  function runVipVisitTick() {
+    const progress = getVipVisitProgress();
+    if (!progress.active) {
+      renderVipVisitPanel();
+      return;
+    }
+
+    if (progress.ready) {
+      expireVipVisit(true);
+      updateUI();
+      return;
+    }
+
+    renderVipVisitPanel();
   }
 
   function renderWholesalePanel() {
@@ -2341,6 +2585,17 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const vipVisitProgress = getVipVisitProgress();
+    if (vipVisitProgress.active && vipVisitProgress.done) {
+      refs.nextActionHint.textContent = `Gợi ý: khách VIP đã hài lòng, nhận thưởng ngay trước khi hết giờ.`;
+      return;
+    }
+
+    if (!vipVisitProgress.active && vipVisitProgress.ready) {
+      refs.nextActionHint.textContent = `Gợi ý: mời khách VIP để nhận thử thách nhanh và phần thưởng thêm.`;
+      return;
+    }
+
     if (state.luckySpin.lastSpinDate !== today) {
       refs.nextActionHint.textContent = 'Gợi ý: thử vòng quay may mắn hôm nay để lấy thêm xu/trứng miễn phí.';
       return;
@@ -2539,6 +2794,26 @@ import { getRefs } from './dom.js';
         desc: `Nhận đơn 30s để lấy thưởng cao trong ngắn hạn.`,
         cta: 'Nhận đơn',
         triggerRef: refs.flashOrderActionBtn
+      });
+    }
+
+    const vipVisitProgress = getVipVisitProgress();
+    if (vipVisitProgress.active && vipVisitProgress.done) {
+      const rewardText = `+${state.vipVisit.rewardCoins} xu${state.vipVisit.rewardEggStock > 0 ? `, +${state.vipVisit.rewardEggStock} trứng` : ''}`;
+      actions.push({
+        id: 'priority_vip_visit_claim',
+        title: 'Khách VIP đang chờ nhận kết quả',
+        desc: `Đã hoàn tất yêu cầu, nhận ngay ${rewardText}.`,
+        cta: 'Nhận thưởng',
+        triggerRef: refs.vipVisitActionBtn
+      });
+    } else if (!vipVisitProgress.active && vipVisitProgress.ready) {
+      actions.push({
+        id: 'priority_vip_visit_new',
+        title: 'Khách VIP có thể ghé trại',
+        desc: `Mở thử thách ${Math.round(VIP_VISIT_DURATION_MS / 1000)}s để lấy thêm xu/trứng.`,
+        cta: 'Mời khách',
+        triggerRef: refs.vipVisitActionBtn
       });
     }
 
@@ -2779,6 +3054,7 @@ import { getRefs } from './dom.js';
     renderMarketOrder();
     renderWholesalePanel();
     renderFlashOrderPanel();
+    renderVipVisitPanel();
     renderQuickSell();
     renderCoinMachine();
     renderDailyGift();
@@ -3182,6 +3458,67 @@ import { getRefs } from './dom.js';
     showToast(`Đơn gấp hoàn tất: +${reward} xu`);
   });
 
+  refs.vipVisitActionBtn.addEventListener('click', () => {
+    const progress = getVipVisitProgress();
+
+    if (!progress.active) {
+      if (!progress.ready) {
+        showToast(`Khách VIP sẽ quay lại sau ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây`);
+        return;
+      }
+
+      const offer = createVipVisitOffer();
+      const now = Date.now();
+      const rewardText = `+${offer.rewardCoins} xu${offer.rewardEggStock > 0 ? `, +${offer.rewardEggStock} trứng` : ''}`;
+      const config = QUEST_METRICS[offer.metric] || QUEST_METRICS.cluckCount;
+
+      state.vipVisit.active = true;
+      state.vipVisit.metric = offer.metric;
+      state.vipVisit.target = offer.target;
+      state.vipVisit.rewardCoins = offer.rewardCoins;
+      state.vipVisit.rewardEggStock = offer.rewardEggStock;
+      state.vipVisit.startedAt = now;
+      state.vipVisit.durationMs = VIP_VISIT_DURATION_MS;
+      state.vipVisit.lastVisitAt = now;
+      state.vipVisit.startCounts = {
+        cluckCount: state.cluckCount,
+        feedCount: state.feedCount,
+        eggCount: state.eggCount
+      };
+
+      saveState();
+      updateUI();
+      addLog(`Khách VIP yêu cầu: ${config.label.toLowerCase()} ${offer.target} ${config.unit} trong ${Math.round(VIP_VISIT_DURATION_MS / 1000)}s (${rewardText}).`);
+      showToast(`Khách VIP: ${config.label} ${offer.target} ${config.unit}`);
+      return;
+    }
+
+    if (progress.ready) {
+      expireVipVisit(true);
+      updateUI();
+      return;
+    }
+
+    const config = QUEST_METRICS[progress.metric] || QUEST_METRICS.cluckCount;
+    if (!progress.done) {
+      showToast(`Khách VIP còn cần ${progress.target - progress.current} ${config.unit}`);
+      return;
+    }
+
+    const rewardCoins = state.vipVisit.rewardCoins;
+    const rewardEggStock = state.vipVisit.rewardEggStock;
+    addCoins(rewardCoins);
+    if (rewardEggStock > 0) {
+      state.eggStock += rewardEggStock;
+    }
+    state.vipVisit.completed += 1;
+    clearVipVisitState();
+    saveState();
+    updateUI();
+    addLog(`Phục vụ khách VIP thành công, nhận +${rewardCoins} xu${rewardEggStock > 0 ? ` và +${rewardEggStock} trứng` : ''}.`);
+    showToast(`Khách VIP thưởng +${rewardCoins} xu${rewardEggStock > 0 ? `, +${rewardEggStock} trứng` : ''}`);
+  });
+
   refs.quickSellOneBtn.addEventListener('click', () => {
     sellEggStock(1);
   });
@@ -3531,6 +3868,8 @@ import { getRefs } from './dom.js';
       refs.startWholesaleBtn.click();
     } else if (key === 'j') {
       refs.flashOrderActionBtn.click();
+    } else if (key === 'u') {
+      refs.vipVisitActionBtn.click();
     } else if (key === 'y') {
       refs.activateWeatherShieldBtn.click();
     } else if (key === 't') {
@@ -3636,6 +3975,7 @@ import { getRefs } from './dom.js';
     renderWholesalePanel();
     runEggRushTick();
     runFlashOrderTick();
+    runVipVisitTick();
     runWeatherShieldTick();
     runFeverTick();
     runComboTick();
@@ -3652,6 +3992,7 @@ import { getRefs } from './dom.js';
 
   runWeatherShieldTick();
   runFlashOrderTick();
+  runVipVisitTick();
   runFeverTick();
   runComboTick();
   updateUI();

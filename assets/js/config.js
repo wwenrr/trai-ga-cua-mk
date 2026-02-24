@@ -77,6 +77,14 @@ export const FLASH_ORDER_MAX_EGGS = 12;
 export const FLASH_ORDER_BASE_REWARD = 24;
 export const FLASH_ORDER_REWARD_PER_EGG = 11;
 export const FLASH_ORDER_FEVER_REWARD_BONUS = 14;
+export const VIP_VISIT_COOLDOWN_MS = 55000;
+export const VIP_VISIT_DURATION_MS = 35000;
+export const VIP_VISIT_TARGET_MIN = 4;
+export const VIP_VISIT_TARGET_MAX = 10;
+export const VIP_VISIT_BASE_REWARD = 26;
+export const VIP_VISIT_REWARD_PER_STEP = 10;
+export const VIP_VISIT_FEVER_REWARD_BONUS = 12;
+export const VIP_VISIT_EGG_BONUS_THRESHOLD = 8;
 export const PREMIUM_FEED_CRAFT_EGGS = 3;
 export const PREMIUM_FEED_FEED_BONUS = 8;
 export const PREMIUM_FEED_COIN_BONUS = 6;
@@ -217,6 +225,23 @@ export const DEFAULT_STATE = {
     lastGeneratedAt: 0,
     completed: 0,
     expired: 0
+  },
+  vipVisit: {
+    active: false,
+    metric: 'cluckCount',
+    target: 0,
+    rewardCoins: 0,
+    rewardEggStock: 0,
+    startedAt: 0,
+    durationMs: 0,
+    startCounts: {
+      cluckCount: 0,
+      feedCount: 0,
+      eggCount: 0
+    },
+    lastVisitAt: 0,
+    completed: 0,
+    failed: 0
   },
   dailyGift: {
     lastClaimDate: '',
