@@ -11,6 +11,10 @@ export function getRefs() {
     streakCount: document.getElementById('streakCount'),
     moodCount: document.getElementById('moodCount'),
     bestMood: document.getElementById('bestMood'),
+    moodStatus: document.getElementById('moodStatus'),
+    moodMeter: document.getElementById('moodMeter'),
+    moodMeterBar: document.getElementById('moodMeterBar'),
+    nextActionHint: document.getElementById('nextActionHint'),
     welcomeMessage: document.getElementById('welcomeMessage'),
 
     visitorName: document.getElementById('visitorName'),
@@ -93,6 +97,8 @@ export function getRefs() {
     dockFeedBtn: document.getElementById('dockFeedBtn'),
     dockEggBtn: document.getElementById('dockEggBtn'),
     dockLabBtn: document.getElementById('dockLabBtn'),
+    labShortcutBtns: Array.from(document.querySelectorAll('.lab-chip')),
+    chickenSvgButtons: Array.from(document.querySelectorAll('[data-chicken]')),
     sun: document.getElementById('sun'),
     sunRays: document.getElementById('sunRays')
   };

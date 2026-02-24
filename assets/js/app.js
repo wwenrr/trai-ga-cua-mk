@@ -1225,6 +1225,91 @@ import { getRefs } from './dom.js';
     statTextCache.set(key, text);
   }
 
+  function renderMoodMeter(mood) {
+    if (refs.moodMeter) {
+      refs.moodMeter.setAttribute('aria-valuenow', String(mood));
+    }
+
+    if (refs.moodMeterBar) {
+      refs.moodMeterBar.style.width = `${mood}%`;
+      refs.moodMeterBar.classList.remove('mood-low', 'mood-mid', 'mood-high', 'mood-peak');
+
+      let tierClass = 'mood-low';
+      if (mood >= 85) {
+        tierClass = 'mood-peak';
+      } else if (mood >= 60) {
+        tierClass = 'mood-high';
+      } else if (mood >= 30) {
+        tierClass = 'mood-mid';
+      }
+
+      refs.moodMeterBar.classList.add(tierClass);
+    }
+
+    if (!refs.moodStatus) {
+      return;
+    }
+
+    if (mood >= 100) {
+      refs.moodStatus.textContent = 'Đàn gà đạt mood tối đa. Giữ phong độ thật đỉnh!';
+      return;
+    }
+
+    if (mood >= 70) {
+      refs.moodStatus.textContent = 'Không khí trang trại đang cực kỳ sôi động.';
+      return;
+    }
+
+    if (mood >= 40) {
+      refs.moodStatus.textContent = 'Đàn gà đã quen bạn và bắt đầu hào hứng hơn.';
+      return;
+    }
+
+    refs.moodStatus.textContent = 'Đàn gà còn hơi nhút nhát, hãy cho ăn và chơi cùng nhiều hơn.';
+  }
+
+  function renderNextActionHint() {
+    if (!refs.nextActionHint) {
+      return;
+    }
+
+    const { quest, done } = getQuestProgress();
+    if (!quest.claimed && done) {
+      refs.nextActionHint.textContent = `Gợi ý: nhiệm vụ hôm nay đã xong, nhận ngay +${quest.reward} xu.`;
+      return;
+    }
+
+    const today = getTodayKey();
+    if (state.dailyGift.lastClaimDate !== today) {
+      refs.nextActionHint.textContent = 'Gợi ý: nhận quà điểm danh trước để có thêm tài nguyên khởi động.';
+      return;
+    }
+
+    ensureMarketOrder();
+    const order = state.marketOrder;
+    if (order && !order.claimed && state.eggStock >= order.target) {
+      refs.nextActionHint.textContent = `Gợi ý: kho đã đủ ${order.target} trứng, giao đơn thương lái để lấy thưởng lớn.`;
+      return;
+    }
+
+    if (state.luckySpin.lastSpinDate !== today) {
+      refs.nextActionHint.textContent = 'Gợi ý: thử vòng quay may mắn hôm nay để lấy thêm xu/trứng miễn phí.';
+      return;
+    }
+
+    if (state.coins >= getFeedUpgradeCost() && state.upgrades.feedLevel < MAX_UPGRADE_LEVEL) {
+      refs.nextActionHint.textContent = 'Gợi ý: đủ xu nâng cấp cho ăn, tăng tốc phát triển đàn gà.';
+      return;
+    }
+
+    if (state.autoFeeder.level > 0 && !state.autoFeeder.enabled) {
+      refs.nextActionHint.textContent = 'Gợi ý: bật trợ lý tự động (phím A) để duy trì nhịp tăng trưởng.';
+      return;
+    }
+
+    refs.nextActionHint.textContent = 'Gợi ý: ưu tiên cho ăn + nhặt trứng để đẩy mood và lượng xu cùng lúc.';
+  }
+
   function updateUI() {
     const mood = getMood();
     if (mood > state.bestMood) {
@@ -1255,6 +1340,8 @@ import { getRefs } from './dom.js';
     refs.factText.textContent = state.factIndex >= 0
       ? FACTS[state.factIndex]
       : 'Bấm "Nghe chuyện vui" để xem fact mới.';
+    renderMoodMeter(mood);
+    renderNextActionHint();
 
     applyTheme();
     renderAchievements(mood);
@@ -1289,6 +1376,51 @@ import { getRefs } from './dom.js';
   }
 
   window.cluck = cluck;
+
+  function bindChickenSvgButtons() {
+    if (!Array.isArray(refs.chickenSvgButtons)) {
+      return;
+    }
+
+    refs.chickenSvgButtons.forEach((button) => {
+      button.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+          return;
+        }
+
+        event.preventDefault();
+        const chickenId = Number(button.getAttribute('data-chicken'));
+        if (chickenId === 1 || chickenId === 2) {
+          cluck(chickenId);
+        }
+      });
+    });
+  }
+
+  function bindLabShortcutButtons() {
+    if (!Array.isArray(refs.labShortcutBtns)) {
+      return;
+    }
+
+    refs.labShortcutBtns.forEach((button) => {
+      button.addEventListener('click', () => {
+        const targetId = button.getAttribute('data-scroll-target');
+        if (!targetId) {
+          return;
+        }
+
+        const section = document.getElementById(targetId);
+        if (!section) {
+          return;
+        }
+
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }
+
+  bindChickenSvgButtons();
+  bindLabShortcutButtons();
 
   refs.saveNameBtn.addEventListener('click', () => {
     const oldName = state.visitorName;
