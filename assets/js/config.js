@@ -37,6 +37,10 @@ export const MARKETING_SELL_BONUS_PER_EGG = 2;
 export const PRICE_LOCK_COST = 32;
 export const PRICE_LOCK_DURATION_MS = 38000;
 export const PRICE_LOCK_COOLDOWN_MS = 76000;
+export const PRICE_ALERT_MIN_TARGET = 4;
+export const PRICE_ALERT_MAX_TARGET = 18;
+export const PRICE_ALERT_BATCH_SIZE = 5;
+export const PRICE_ALERT_COOLDOWN_MS = 9000;
 export const EGG_RUSH_COST = 42;
 export const EGG_RUSH_DURATION_MS = 30000;
 export const EGG_RUSH_INTERVAL_FACTOR = 0.58;
@@ -218,6 +222,14 @@ export const DEFAULT_STATE = {
   autoSeller: {
     enabled: false,
     threshold: AUTO_SELL_DEFAULT_THRESHOLD,
+    totalEggsSold: 0,
+    totalCoinsEarned: 0
+  },
+  priceAlert: {
+    enabled: false,
+    targetPrice: 8,
+    lastTriggeredAt: 0,
+    totalTriggers: 0,
     totalEggsSold: 0,
     totalCoinsEarned: 0
   },

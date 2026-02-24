@@ -720,6 +720,30 @@ button:disabled {
   accent-color: #15803d;
 }
 
+.price-alert-card {
+  background: linear-gradient(180deg, rgba(254, 252, 232, 0.95) 0%, rgba(254, 243, 199, 0.84) 100%);
+}
+
+.price-alert-track {
+  width: 100%;
+  height: 0.62rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(161, 98, 7, 0.18);
+}
+
+.price-alert-bar {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #facc15 0%, #a16207 100%);
+  transition: width 0.2s linear;
+}
+
+.price-alert-slider {
+  accent-color: #a16207;
+}
+
 .sanitation-card {
   background: linear-gradient(180deg, rgba(240, 253, 250, 0.95) 0%, rgba(204, 251, 241, 0.84) 100%);
 }
@@ -1456,6 +1480,22 @@ body.night-mode #autoSellThresholdValue {
 }
 
 body.night-mode .auto-sell-track {
+  background: rgba(148, 163, 184, 0.24);
+}
+
+body.night-mode .price-alert-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.82) 100%);
+  border-color: rgba(250, 204, 21, 0.36);
+}
+
+body.night-mode #priceAlertHint,
+body.night-mode #priceAlertMeta,
+body.night-mode .price-alert-card label,
+body.night-mode #priceAlertTargetValue {
+  color: #cbd5e1;
+}
+
+body.night-mode .price-alert-track {
   background: rgba(148, 163, 184, 0.24);
 }
 

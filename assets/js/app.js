@@ -38,6 +38,10 @@ import {
   PRICE_LOCK_COST,
   PRICE_LOCK_DURATION_MS,
   PRICE_LOCK_COOLDOWN_MS,
+  PRICE_ALERT_MIN_TARGET,
+  PRICE_ALERT_MAX_TARGET,
+  PRICE_ALERT_BATCH_SIZE,
+  PRICE_ALERT_COOLDOWN_MS,
   EGG_RUSH_COST,
   EGG_RUSH_DURATION_MS,
   EGG_RUSH_INTERVAL_FACTOR,
@@ -220,6 +224,28 @@ import { getRefs } from './dom.js';
       threshold,
       totalEggsSold: toSafeNumber(rawSeller.totalEggsSold),
       totalCoinsEarned: toSafeNumber(rawSeller.totalCoinsEarned)
+    };
+  }
+
+  function normalizePriceAlert(rawAlert) {
+    if (!rawAlert || typeof rawAlert !== 'object') {
+      return {
+        enabled: false,
+        targetPrice: 8,
+        lastTriggeredAt: 0,
+        totalTriggers: 0,
+        totalEggsSold: 0,
+        totalCoinsEarned: 0
+      };
+    }
+
+    return {
+      enabled: Boolean(rawAlert.enabled),
+      targetPrice: clamp(toSafeNumber(rawAlert.targetPrice), PRICE_ALERT_MIN_TARGET, PRICE_ALERT_MAX_TARGET),
+      lastTriggeredAt: toSafeNumber(rawAlert.lastTriggeredAt),
+      totalTriggers: toSafeNumber(rawAlert.totalTriggers),
+      totalEggsSold: toSafeNumber(rawAlert.totalEggsSold),
+      totalCoinsEarned: toSafeNumber(rawAlert.totalCoinsEarned)
     };
   }
 
@@ -775,6 +801,7 @@ import { getRefs } from './dom.js';
       },
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
       autoSeller: normalizeAutoSeller(input.autoSeller),
+      priceAlert: normalizePriceAlert(input.priceAlert),
       sanitation: normalizeSanitation(input.sanitation),
       vetClinic: normalizeVetClinic(input.vetClinic),
       marketing: normalizeMarketing(input.marketing),
@@ -2786,6 +2813,118 @@ import { getRefs } from './dom.js';
     updateUI();
   }
 
+  function getPriceAlertTarget() {
+    return clamp(toSafeNumber(state.priceAlert.targetPrice), PRICE_ALERT_MIN_TARGET, PRICE_ALERT_MAX_TARGET);
+  }
+
+  function getPriceAlertCooldownRemainingMs() {
+    if (!state.priceAlert || state.priceAlert.lastTriggeredAt <= 0) {
+      return 0;
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - state.priceAlert.lastTriggeredAt);
+    return Math.max(0, PRICE_ALERT_COOLDOWN_MS - elapsedMs);
+  }
+
+  function getPriceAlertProgress() {
+    const cooldownRemainingMs = getPriceAlertCooldownRemainingMs();
+    return {
+      ready: cooldownRemainingMs <= 0,
+      cooldownRemainingMs,
+      progress: PRICE_ALERT_COOLDOWN_MS > 0
+        ? clamp(Math.round(((PRICE_ALERT_COOLDOWN_MS - cooldownRemainingMs) / PRICE_ALERT_COOLDOWN_MS) * 100), 0, 100)
+        : 100
+    };
+  }
+
+  function renderPriceAlertPanel() {
+    if (!refs.priceAlertStatus || !refs.priceAlertHint || !refs.priceAlertMeta || !refs.priceAlertTargetInput || !refs.priceAlertTargetValue || !refs.priceAlertProgressBar || !refs.togglePriceAlertBtn) {
+      return;
+    }
+
+    const target = getPriceAlertTarget();
+    if (state.priceAlert.targetPrice !== target) {
+      state.priceAlert.targetPrice = target;
+    }
+
+    const progress = getPriceAlertProgress();
+    const unitPrice = getQuickSellUnitPrice();
+    const priceFill = target > 0 ? clamp(Math.round((unitPrice / target) * 100), 0, 100) : 0;
+
+    refs.priceAlertTargetInput.min = String(PRICE_ALERT_MIN_TARGET);
+    refs.priceAlertTargetInput.max = String(PRICE_ALERT_MAX_TARGET);
+    refs.priceAlertTargetInput.value = String(target);
+    refs.priceAlertTargetValue.textContent = `${target} xu/trứng`;
+    refs.priceAlertMeta.textContent = `Đã kích hoạt ${state.priceAlert.totalTriggers} lượt • tự bán ${state.priceAlert.totalEggsSold} trứng • thu ${state.priceAlert.totalCoinsEarned} xu.`;
+    refs.togglePriceAlertBtn.textContent = state.priceAlert.enabled ? 'Auto chốt giá: Bật' : 'Auto chốt giá: Tắt';
+
+    if (!state.priceAlert.enabled) {
+      refs.priceAlertProgressBar.style.width = `${priceFill}%`;
+      refs.priceAlertStatus.classList.remove('urgent-timer');
+      refs.priceAlertStatus.textContent = 'Auto chốt giá đang tắt.';
+      refs.priceAlertHint.textContent = `Giá hiện tại ${unitPrice} xu/trứng. Bật để tự bán ${PRICE_ALERT_BATCH_SIZE} trứng khi đạt từ ${target} xu/trứng.`;
+      return;
+    }
+
+    if (!progress.ready) {
+      refs.priceAlertProgressBar.style.width = `${progress.progress}%`;
+      refs.priceAlertStatus.classList.remove('urgent-timer');
+      refs.priceAlertStatus.textContent = `Đang nạp lượt kế tiếp, còn ${Math.ceil(progress.cooldownRemainingMs / 1000)} giây.`;
+      refs.priceAlertHint.textContent = `Mục tiêu ${target} xu/trứng • giá hiện tại ${unitPrice} xu/trứng.`;
+      return;
+    }
+
+    refs.priceAlertProgressBar.style.width = `${priceFill}%`;
+    if (unitPrice >= target && state.eggStock >= PRICE_ALERT_BATCH_SIZE) {
+      refs.priceAlertStatus.classList.add('urgent-timer');
+      refs.priceAlertStatus.textContent = `Sẵn sàng chốt tự động: ${unitPrice}/${target} xu • kho ${state.eggStock} trứng.`;
+      refs.priceAlertHint.textContent = `Hệ thống sẽ tự bán ${PRICE_ALERT_BATCH_SIZE} trứng ở tick kế tiếp để khóa lợi nhuận.`;
+      return;
+    }
+
+    refs.priceAlertStatus.classList.remove('urgent-timer');
+    if (unitPrice < target) {
+      refs.priceAlertStatus.textContent = `Giá ${unitPrice} xu chưa đạt ngưỡng ${target} xu.`;
+      refs.priceAlertHint.textContent = 'Tiếp tục canh thị trường hoặc bật buff giá để đạt mục tiêu tự chốt.';
+      return;
+    }
+
+    refs.priceAlertStatus.textContent = `Đã đạt giá mục tiêu nhưng kho chưa đủ ${PRICE_ALERT_BATCH_SIZE} trứng.`;
+    refs.priceAlertHint.textContent = `Hiện có ${state.eggStock} trứng, gom thêm để hệ thống tự bán.`;
+  }
+
+  function runPriceAlertTick() {
+    if (!state.priceAlert.enabled) {
+      return;
+    }
+
+    if (getPriceAlertCooldownRemainingMs() > 0) {
+      return;
+    }
+
+    const target = getPriceAlertTarget();
+    const unitPrice = getQuickSellUnitPrice();
+    if (unitPrice < target || state.eggStock < PRICE_ALERT_BATCH_SIZE) {
+      return;
+    }
+
+    const quantity = Math.min(PRICE_ALERT_BATCH_SIZE, state.eggStock);
+    const revenue = quantity * unitPrice;
+    state.eggStock -= quantity;
+    state.soldEggCount += quantity;
+    state.priceAlert.lastTriggeredAt = Date.now();
+    state.priceAlert.totalTriggers += 1;
+    state.priceAlert.totalEggsSold += quantity;
+    state.priceAlert.totalCoinsEarned += revenue;
+    addMarketingBonusCoins(quantity);
+    registerProtectedSale(quantity);
+    addCoins(revenue);
+    saveState();
+    updateUI();
+    addLog(`Auto chốt giá đã bán ${quantity} trứng ở ${unitPrice} xu/trứng (+${revenue} xu).`);
+    showToast(`Auto chốt giá: +${revenue} xu`);
+  }
+
   function renderSanitationPanel() {
     if (!refs.sanitationStatus || !refs.sanitationHint || !refs.sanitationMeta || !refs.sanitationProgressBar || !refs.cleanNowBtn || !refs.sanitationBotBtn) {
       return;
@@ -3152,6 +3291,32 @@ import { getRefs } from './dom.js';
       actions.push({
         id: 'quick_price_lock_sell',
         label: 'Khóa giá đang bật: bán nhanh 5 trứng',
+        triggerRef: refs.quickSellFiveBtn
+      });
+    }
+
+    const priceAlertTarget = getPriceAlertTarget();
+    const priceAlertProgress = getPriceAlertProgress();
+    const quickUnitPrice = getQuickSellUnitPrice();
+    if (!state.priceAlert.enabled
+      && quickUnitPrice >= priceAlertTarget
+      && state.eggStock >= PRICE_ALERT_BATCH_SIZE
+      && refs.togglePriceAlertBtn) {
+      actions.push({
+        id: 'quick_price_alert_enable',
+        label: `Bật Auto chốt giá (${quickUnitPrice}/${priceAlertTarget} xu)`,
+        triggerRef: refs.togglePriceAlertBtn
+      });
+    }
+
+    if (state.priceAlert.enabled
+      && priceAlertProgress.ready
+      && quickUnitPrice >= priceAlertTarget
+      && state.eggStock >= PRICE_ALERT_BATCH_SIZE
+      && refs.quickSellFiveBtn) {
+      actions.push({
+        id: 'quick_price_alert_sell',
+        label: `Giá đạt ngưỡng: bán ngay ${PRICE_ALERT_BATCH_SIZE} trứng`,
         triggerRef: refs.quickSellFiveBtn
       });
     }
@@ -3890,6 +4055,19 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const priceAlertTarget = getPriceAlertTarget();
+    const priceAlertProgress = getPriceAlertProgress();
+    const quickUnitPrice = getQuickSellUnitPrice();
+    if (state.priceAlert.enabled && priceAlertProgress.ready && quickUnitPrice >= priceAlertTarget && state.eggStock >= PRICE_ALERT_BATCH_SIZE) {
+      refs.nextActionHint.textContent = `Gợi ý: Auto chốt giá đang sẵn sàng, hệ thống sẽ tự bán ${PRICE_ALERT_BATCH_SIZE} trứng ở mốc ${quickUnitPrice} xu.`;
+      return;
+    }
+
+    if (!state.priceAlert.enabled && quickUnitPrice >= priceAlertTarget && state.eggStock >= PRICE_ALERT_BATCH_SIZE) {
+      refs.nextActionHint.textContent = `Gợi ý: giá đang đạt ngưỡng, bật Auto chốt giá (phím 4) để tự bán theo lô ổn định.`;
+      return;
+    }
+
     ensureMarketOrder();
     const order = state.marketOrder;
     if (order && !order.claimed && state.eggStock >= order.target) {
@@ -4315,6 +4493,27 @@ import { getRefs } from './dom.js';
       });
     }
 
+    const priceAlertTarget = getPriceAlertTarget();
+    const priceAlertProgress = getPriceAlertProgress();
+    const quickUnitPrice = getQuickSellUnitPrice();
+    if (!state.priceAlert.enabled && quickUnitPrice >= priceAlertTarget && state.eggStock >= PRICE_ALERT_BATCH_SIZE && refs.togglePriceAlertBtn) {
+      actions.push({
+        id: 'priority_price_alert_enable',
+        title: 'Giá đạt ngưỡng auto chốt',
+        desc: `Giá hiện tại ${quickUnitPrice} xu đã chạm mốc ${priceAlertTarget} xu. Bật auto chốt để tự bán theo lô.`,
+        cta: 'Bật auto chốt',
+        triggerRef: refs.togglePriceAlertBtn
+      });
+    } else if (state.priceAlert.enabled && priceAlertProgress.ready && quickUnitPrice >= priceAlertTarget && state.eggStock >= PRICE_ALERT_BATCH_SIZE && refs.quickSellFiveBtn) {
+      actions.push({
+        id: 'priority_price_alert_sell',
+        title: 'Auto chốt giá đang ở cửa bán',
+        desc: `Giá ${quickUnitPrice} xu đang đạt mục tiêu, có thể bán nhanh ${PRICE_ALERT_BATCH_SIZE} trứng ngay.`,
+        cta: 'Bán nhanh',
+        triggerRef: refs.quickSellFiveBtn
+      });
+    }
+
     const marketingProgress = getMarketingProgress();
     if (!marketingProgress.active && marketingProgress.ready && state.eggStock >= WHOLESALE_EGG_BATCH && state.coins >= MARKETING_COST && refs.startMarketingBtn) {
       actions.push({
@@ -4549,6 +4748,7 @@ import { getRefs } from './dom.js';
     renderPremiumFeed();
     renderAutoFeeder();
     renderAutoSellerPanel();
+    renderPriceAlertPanel();
     renderSanitationPanel();
     renderVetClinicPanel();
     renderMarketingPanel();
@@ -5351,6 +5551,40 @@ import { getRefs } from './dom.js';
     });
   }
 
+  if (refs.priceAlertTargetInput) {
+    refs.priceAlertTargetInput.addEventListener('input', () => {
+      const preview = clamp(toSafeNumber(refs.priceAlertTargetInput.value), PRICE_ALERT_MIN_TARGET, PRICE_ALERT_MAX_TARGET);
+      if (refs.priceAlertTargetValue) {
+        refs.priceAlertTargetValue.textContent = `${preview} xu/trứng`;
+      }
+    });
+
+    refs.priceAlertTargetInput.addEventListener('change', () => {
+      const target = clamp(toSafeNumber(refs.priceAlertTargetInput.value), PRICE_ALERT_MIN_TARGET, PRICE_ALERT_MAX_TARGET);
+      state.priceAlert.targetPrice = target;
+      saveState();
+      updateUI();
+      addLog(`Cập nhật Auto chốt giá: mục tiêu ${target} xu/trứng.`);
+      showToast(`Auto chốt giá mục tiêu: ${target} xu/trứng`);
+    });
+  }
+
+  if (refs.togglePriceAlertBtn) {
+    refs.togglePriceAlertBtn.addEventListener('click', () => {
+      const target = refs.priceAlertTargetInput
+        ? clamp(toSafeNumber(refs.priceAlertTargetInput.value), PRICE_ALERT_MIN_TARGET, PRICE_ALERT_MAX_TARGET)
+        : getPriceAlertTarget();
+      state.priceAlert.targetPrice = target;
+      state.priceAlert.enabled = !state.priceAlert.enabled;
+      saveState();
+      updateUI();
+      addLog(state.priceAlert.enabled
+        ? `Đã bật Auto chốt giá (mục tiêu ${target} xu/trứng, lô ${PRICE_ALERT_BATCH_SIZE} trứng).`
+        : 'Đã tắt Auto chốt giá.');
+      showToast(state.priceAlert.enabled ? 'Auto chốt giá: Bật' : 'Auto chốt giá: Tắt');
+    });
+  }
+
   if (refs.cleanNowBtn) {
     refs.cleanNowBtn.addEventListener('click', () => {
       const cleanliness = getCleanliness();
@@ -5643,6 +5877,10 @@ import { getRefs } from './dom.js';
       if (refs.startPriceLockBtn) {
         refs.startPriceLockBtn.click();
       }
+    } else if (key === '4') {
+      if (refs.togglePriceAlertBtn) {
+        refs.togglePriceAlertBtn.click();
+      }
     } else if (key === 'f') {
       refs.feedBtn.click();
     } else if (key === 'e') {
@@ -5783,6 +6021,7 @@ import { getRefs } from './dom.js';
     renderCoinMachine();
     renderWholesalePanel();
     runAutoSellerTick();
+    runPriceAlertTick();
     runSanitationTick();
     runVetClinicTick();
     runMarketingTick();
@@ -5807,6 +6046,7 @@ import { getRefs } from './dom.js';
 
   runWeatherShieldTick();
   runAutoSellerTick();
+  runPriceAlertTick();
   runSanitationTick();
   runVetClinicTick();
   runMarketingTick();
