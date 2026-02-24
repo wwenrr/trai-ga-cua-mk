@@ -49,6 +49,10 @@ export function getRefs() {
     luckySpinReward: document.getElementById('luckySpinReward'),
     luckySpinTotal: document.getElementById('luckySpinTotal'),
     luckySpinBtn: document.getElementById('luckySpinBtn'),
+    premiumFeedPacks: document.getElementById('premiumFeedPacks'),
+    premiumFeedStats: document.getElementById('premiumFeedStats'),
+    craftPremiumFeedBtn: document.getElementById('craftPremiumFeedBtn'),
+    usePremiumFeedBtn: document.getElementById('usePremiumFeedBtn'),
 
     questTitle: document.getElementById('questTitle'),
     questDesc: document.getElementById('questDesc'),

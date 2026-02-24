@@ -12,6 +12,9 @@ import {
   AUTO_FEEDER_MAX_LEVEL,
   AUTO_FEEDER_BASE_INTERVAL_MS,
   AUTO_FEEDER_MIN_INTERVAL_MS,
+  PREMIUM_FEED_CRAFT_EGGS,
+  PREMIUM_FEED_FEED_BONUS,
+  PREMIUM_FEED_COIN_BONUS,
   LUCKY_SPIN_REWARDS,
   WEATHER_CONFIG,
   QUEST_METRICS,
@@ -157,6 +160,22 @@ import { getRefs } from './dom.js';
     };
   }
 
+  function normalizePremiumFeed(rawPremiumFeed) {
+    if (!rawPremiumFeed || typeof rawPremiumFeed !== 'object') {
+      return {
+        packs: 0,
+        crafted: 0,
+        used: 0
+      };
+    }
+
+    return {
+      packs: toSafeNumber(rawPremiumFeed.packs),
+      crafted: toSafeNumber(rawPremiumFeed.crafted),
+      used: toSafeNumber(rawPremiumFeed.used)
+    };
+  }
+
   function normalizeCoinMachine(rawMachine) {
     if (!rawMachine || typeof rawMachine !== 'object') {
       return {
@@ -246,6 +265,7 @@ import { getRefs } from './dom.js';
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
       dailyGift: normalizeDailyGift(input.dailyGift),
       luckySpin: normalizeLuckySpin(input.luckySpin),
+      premiumFeed: normalizePremiumFeed(input.premiumFeed),
       coinMachine: normalizeCoinMachine(input.coinMachine),
       incubator: normalizeIncubator(input.incubator),
       marketOrder: normalizeMarketOrder(input.marketOrder),
@@ -804,6 +824,44 @@ import { getRefs } from './dom.js';
     refs.luckySpinBtn.textContent = 'Quay ngay';
   }
 
+  function getPremiumFeedCraftCost() {
+    return PREMIUM_FEED_CRAFT_EGGS;
+  }
+
+  function getPremiumFeedFeedBonus() {
+    return PREMIUM_FEED_FEED_BONUS + Math.floor(state.upgrades.feedLevel / 2);
+  }
+
+  function getPremiumFeedCoinBonus() {
+    return PREMIUM_FEED_COIN_BONUS + Math.floor(state.upgrades.feedLevel / 2);
+  }
+
+  function renderPremiumFeed() {
+    if (!refs.premiumFeedPacks || !refs.premiumFeedStats || !refs.craftPremiumFeedBtn || !refs.usePremiumFeedBtn) {
+      return;
+    }
+
+    const packs = state.premiumFeed.packs;
+    const craftCost = getPremiumFeedCraftCost();
+    const feedBonus = getPremiumFeedFeedBonus();
+    const coinBonus = getPremiumFeedCoinBonus();
+
+    refs.premiumFeedPacks.textContent = `Bao cám hiện có: ${packs}`;
+    refs.premiumFeedStats.textContent = `Đã chế biến ${state.premiumFeed.crafted} bao, đã dùng ${state.premiumFeed.used} lần.`;
+
+    const canCraft = state.eggStock >= craftCost;
+    refs.craftPremiumFeedBtn.disabled = !canCraft;
+    refs.craftPremiumFeedBtn.classList.toggle('opacity-60', !canCraft);
+    refs.craftPremiumFeedBtn.classList.toggle('cursor-not-allowed', !canCraft);
+    refs.craftPremiumFeedBtn.textContent = `Chế biến 1 bao (-${craftCost} trứng kho)`;
+
+    const canUse = packs > 0;
+    refs.usePremiumFeedBtn.disabled = !canUse;
+    refs.usePremiumFeedBtn.classList.toggle('opacity-60', !canUse);
+    refs.usePremiumFeedBtn.classList.toggle('cursor-not-allowed', !canUse);
+    refs.usePremiumFeedBtn.textContent = `Dùng 1 bao (+${feedBonus} cho ăn, +${coinBonus} xu)`;
+  }
+
   function sellEggStock(amount) {
     const request = toSafeNumber(amount);
     if (request <= 0 || state.eggStock <= 0) {
@@ -1171,6 +1229,7 @@ import { getRefs } from './dom.js';
     renderCoinMachine();
     renderDailyGift();
     renderLuckySpin();
+    renderPremiumFeed();
     renderAutoFeeder();
     renderIncubator();
     renderLogs();
@@ -1474,6 +1533,45 @@ import { getRefs } from './dom.js';
     showToast(`Vòng quay: ${reward.label}`);
   });
 
+  refs.craftPremiumFeedBtn.addEventListener('click', () => {
+    const craftCost = getPremiumFeedCraftCost();
+    if (state.eggStock < craftCost) {
+      showToast(`Cần thêm ${craftCost - state.eggStock} trứng kho để chế biến`);
+      return;
+    }
+
+    state.eggStock -= craftCost;
+    state.premiumFeed.packs += 1;
+    state.premiumFeed.crafted += 1;
+
+    saveState();
+    updateUI();
+    addLog(`Chế biến 1 bao cám premium (-${craftCost} trứng kho).`);
+    showToast('Đã chế biến 1 bao cám premium');
+  });
+
+  refs.usePremiumFeedBtn.addEventListener('click', () => {
+    if (state.premiumFeed.packs <= 0) {
+      showToast('Bạn chưa có bao cám premium nào');
+      return;
+    }
+
+    const feedBonus = getPremiumFeedFeedBonus();
+    const coinBonus = getPremiumFeedCoinBonus();
+
+    state.premiumFeed.packs -= 1;
+    state.premiumFeed.used += 1;
+    state.feedCount += feedBonus;
+    addCoins(coinBonus);
+
+    saveState();
+    updateUI();
+    bounceChicken(1);
+    bounceChicken(2);
+    addLog(`Dùng cám premium: +${feedBonus} lượt cho ăn, +${coinBonus} xu.`);
+    showToast(`Cám premium: +${feedBonus} cho ăn, +${coinBonus} xu`);
+  });
+
   refs.buyFeedUpgradeBtn.addEventListener('click', () => {
     if (state.upgrades.feedLevel >= MAX_UPGRADE_LEVEL) {
       showToast('Nâng cấp cho ăn đã đạt mức tối đa');
@@ -1656,6 +1754,8 @@ import { getRefs } from './dom.js';
       refs.claimGiftBtn.click();
     } else if (key === 'l') {
       refs.luckySpinBtn.click();
+    } else if (key === 'x') {
+      refs.usePremiumFeedBtn.click();
     } else if (key === 'r') {
       refs.claimCoinMachineBtn.click();
     } else if (key === 'h') {

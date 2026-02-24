@@ -11,6 +11,9 @@ export const MARKET_ORDER_MAX_EGGS = 12;
 export const AUTO_FEEDER_MAX_LEVEL = 6;
 export const AUTO_FEEDER_BASE_INTERVAL_MS = 22000;
 export const AUTO_FEEDER_MIN_INTERVAL_MS = 7000;
+export const PREMIUM_FEED_CRAFT_EGGS = 3;
+export const PREMIUM_FEED_FEED_BONUS = 8;
+export const PREMIUM_FEED_COIN_BONUS = 6;
 export const LUCKY_SPIN_REWARDS = [
   { id: 'spin_coin_20', label: '+20 xu', type: 'coins', amount: 20, weight: 30 },
   { id: 'spin_coin_45', label: '+45 xu', type: 'coins', amount: 45, weight: 20 },
@@ -113,6 +116,11 @@ export const DEFAULT_STATE = {
     totalSpins: 0,
     lastRewardId: ''
   },
+  premiumFeed: {
+    packs: 0,
+    crafted: 0,
+    used: 0
+  },
   coinMachine: {
     active: false,
     startedAt: 0,
@@ -144,6 +152,7 @@ export const ACHIEVEMENTS = [
   { id: 'egg_3', label: 'Thợ săn trứng', desc: 'Nhặt ít nhất 3 trứng', reward: 20, check: (s) => s.eggCount >= 3 },
   { id: 'trade_20', label: 'Thương lái mát tay', desc: 'Bán ít nhất 20 trứng tồn kho', reward: 26, check: (s) => s.soldEggCount >= 20 },
   { id: 'spin_10', label: 'Vua vòng quay', desc: 'Quay may mắn ít nhất 10 lần', reward: 28, check: (s) => s.luckySpin && s.luckySpin.totalSpins >= 10 },
+  { id: 'premium_5', label: 'Đầu bếp trang trại', desc: 'Dùng cám premium ít nhất 5 lần', reward: 30, check: (s) => s.premiumFeed && s.premiumFeed.used >= 5 },
   { id: 'hatch_3', label: 'Lò ấp mát tay', desc: 'Ấp nở ít nhất 3 gà con', reward: 24, check: (s) => s.hatchCount >= 3 },
   { id: 'happy_80', label: 'Đàn gà cực vui', desc: 'Đạt mood từ 80%', reward: 25, check: (_, mood) => mood >= 80 },
   { id: 'legend_100', label: 'Huyền thoại trang trại', desc: 'Đạt mood 100%', reward: 35, check: (_, mood) => mood >= 100 }
