@@ -184,6 +184,12 @@
       <button type="button" class="lab-chip" data-scroll-target="farm-egg-yard">🥚 Sân trứng</button>
       <button type="button" class="lab-chip" data-scroll-target="farm-management">📊 Quản lý</button>
     </div>
+    <div class="lab-snapshot" role="status" aria-live="polite">
+      <div class="snapshot-chip"><span class="snapshot-label">Mood</span><span id="labSnapMood" class="snapshot-value">0%</span></div>
+      <div class="snapshot-chip"><span class="snapshot-label">Xu</span><span id="labSnapCoins" class="snapshot-value">0</span></div>
+      <div class="snapshot-chip"><span class="snapshot-label">Kho trứng</span><span id="labSnapEggs" class="snapshot-value">0</span></div>
+      <div class="snapshot-chip"><span class="snapshot-label">Thời tiết</span><span id="labSnapWeather" class="snapshot-value">Nắng đẹp ☀️</span></div>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
       <div id="farm-personal" class="bg-white rounded-3xl p-8 shadow-xl farm-panel">
         <h3 class="text-3xl font-black text-amber-700">Cá nhân hóa</h3>
@@ -231,9 +237,15 @@
 
       <div id="farm-management" class="bg-white rounded-3xl p-8 shadow-xl md:col-span-2 farm-panel">
         <h3 class="text-3xl font-black text-violet-700">Trung tâm quản lý</h3>
+        <div class="lab-filters" role="tablist" aria-label="Lọc thẻ quản lý">
+          <button type="button" class="lab-filter active" data-lab-filter="all" role="tab" aria-selected="true">Tất cả</button>
+          <button type="button" class="lab-filter" data-lab-filter="economy" role="tab" aria-selected="false">Kinh tế</button>
+          <button type="button" class="lab-filter" data-lab-filter="mission" role="tab" aria-selected="false">Nhiệm vụ</button>
+          <button type="button" class="lab-filter" data-lab-filter="automation" role="tab" aria-selected="false">Tự động hóa</button>
+        </div>
 
         <div class="control-grid mt-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <section class="rounded-2xl border-2 border-violet-200 p-4 lab-card">
+          <section class="rounded-2xl border-2 border-violet-200 p-4 lab-card" data-lab-group="economy">
             <h4 class="text-2xl font-black text-violet-700">Kinh tế & nâng cấp</h4>
             <p class="mt-2 text-lg">Số dư hiện tại: <span id="coinBalance" class="font-black">0</span> xu</p>
             <p class="mt-1 text-base text-slate-700">Kho trứng: <span id="eggStockBalance" class="font-black">0</span> quả</p>
@@ -249,7 +261,7 @@
             </div>
           </section>
 
-          <section class="rounded-2xl border-2 border-lime-200 p-4 lab-card">
+          <section class="rounded-2xl border-2 border-lime-200 p-4 lab-card" data-lab-group="automation">
             <h4 class="text-2xl font-black text-lime-700">Trợ lý tự động</h4>
             <p class="mt-2 text-lg">Cấp trợ lý: <span id="autoFeederLevel" class="font-black">Lv0</span></p>
             <p id="autoFeederStatus" class="mt-1 text-base text-slate-700">Chưa thuê trợ lý tự động cho ăn.</p>
@@ -260,7 +272,7 @@
             <button id="toggleAutoFeederBtn" class="mt-3 w-full px-4 py-3 bg-lime-800 hover:bg-lime-900 text-white rounded-xl text-lg">Tự động: Tắt</button>
           </section>
 
-          <section class="rounded-2xl border-2 border-emerald-200 p-4 lab-card">
+          <section class="rounded-2xl border-2 border-emerald-200 p-4 lab-card" data-lab-group="mission">
             <h4 class="text-2xl font-black text-emerald-700">Nhiệm vụ hôm nay</h4>
             <p id="questTitle" class="mt-2 text-lg font-black">Đang tạo nhiệm vụ...</p>
             <p id="questDesc" class="mt-1 text-base text-slate-700"></p>
@@ -268,17 +280,17 @@
             <div class="mt-2 w-full h-3 rounded-full bg-slate-200 overflow-hidden">
               <div id="questProgressBar" class="quest-bar h-full bg-emerald-500" style="width: 0%;"></div>
             </div>
-            <button id="claimQuestBtn" class="mt-4 w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-lg">Nhận thưởng</button>
+            <button id="claimQuestBtn" data-action-cta class="mt-4 w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-lg">Nhận thưởng</button>
           </section>
 
-          <section class="rounded-2xl border-2 border-sky-200 p-4 lab-card">
+          <section class="rounded-2xl border-2 border-sky-200 p-4 lab-card" data-lab-group="mission">
             <h4 class="text-2xl font-black text-sky-700">Thời tiết động</h4>
             <p id="weatherLabel" class="mt-2 text-lg font-black">Nắng đẹp ☀️</p>
             <p id="weatherEffect" class="mt-1 text-base text-slate-700">Đang cập nhật...</p>
             <button id="rerollWeatherBtn" class="mt-4 w-full px-4 py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-lg">Đổi thời tiết</button>
           </section>
 
-          <section class="rounded-2xl border-2 border-rose-200 p-4 lab-card">
+          <section class="rounded-2xl border-2 border-rose-200 p-4 lab-card" data-lab-group="mission">
             <h4 class="text-2xl font-black text-rose-700">Quà điểm danh</h4>
             <p id="giftStatus" class="mt-2 text-lg font-black">Mỗi ngày nhận quà 1 lần.</p>
             <p id="giftReward" class="mt-1 text-base text-slate-700"></p>
@@ -286,18 +298,18 @@
             <div class="mt-2 w-full h-3 rounded-full bg-rose-100 overflow-hidden">
               <div id="giftProgressBar" class="gift-bar h-full bg-rose-500" style="width: 0%;"></div>
             </div>
-            <button id="claimGiftBtn" class="mt-4 w-full px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-lg">Nhận quà hôm nay</button>
+            <button id="claimGiftBtn" data-action-cta class="mt-4 w-full px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-lg">Nhận quà hôm nay</button>
           </section>
 
-          <section class="rounded-2xl border-2 border-fuchsia-200 p-4 lab-card">
+          <section class="rounded-2xl border-2 border-fuchsia-200 p-4 lab-card" data-lab-group="mission">
             <h4 class="text-2xl font-black text-fuchsia-700">Vòng quay may mắn</h4>
             <p id="luckySpinStatus" class="mt-2 text-lg font-black">Mỗi ngày được quay 1 lần.</p>
             <p id="luckySpinReward" class="mt-1 text-base text-slate-700"></p>
             <p id="luckySpinTotal" class="mt-1 text-base text-slate-700">Tổng số lần quay: 0</p>
-            <button id="luckySpinBtn" class="mt-4 w-full px-4 py-3 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-xl text-lg">Quay ngay</button>
+            <button id="luckySpinBtn" data-action-cta class="mt-4 w-full px-4 py-3 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-xl text-lg">Quay ngay</button>
           </section>
 
-          <section class="rounded-2xl border-2 border-cyan-200 p-4 lab-card">
+          <section class="rounded-2xl border-2 border-cyan-200 p-4 lab-card" data-lab-group="automation">
             <h4 class="text-2xl font-black text-cyan-700">Xưởng cám premium</h4>
             <p id="premiumFeedPacks" class="mt-2 text-lg font-black">Bao cám hiện có: 0</p>
             <p id="premiumFeedStats" class="mt-1 text-base text-slate-700">Đã chế biến 0 bao, đã dùng 0 lần.</p>
@@ -305,7 +317,7 @@
             <button id="usePremiumFeedBtn" class="mt-3 w-full px-4 py-3 bg-cyan-800 hover:bg-cyan-900 text-white rounded-xl text-lg">Dùng 1 bao cám</button>
           </section>
 
-          <section class="rounded-2xl border-2 border-orange-200 p-4 lg:col-span-2 lab-card">
+          <section class="rounded-2xl border-2 border-orange-200 p-4 lg:col-span-2 lab-card" data-lab-group="economy">
             <h4 class="text-2xl font-black text-orange-700">Đơn hàng thương lái</h4>
             <p id="orderTitle" class="mt-2 text-lg font-black">Đang tạo đơn hàng...</p>
             <p id="orderDesc" class="mt-1 text-base text-slate-700"></p>
@@ -313,11 +325,11 @@
             <div class="mt-2 w-full h-3 rounded-full bg-orange-100 overflow-hidden">
               <div id="orderProgressBar" class="order-bar h-full bg-orange-500" style="width: 0%;"></div>
             </div>
-            <button id="claimOrderBtn" class="mt-4 w-full px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-lg">Giao trứng</button>
+            <button id="claimOrderBtn" data-action-cta class="mt-4 w-full px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-lg">Giao trứng</button>
             <p class="mt-3 text-base text-slate-700">Mỗi ngày có 1 đơn mới. Giao đủ trứng tồn kho để nhận xu thưởng lớn.</p>
           </section>
 
-          <section class="rounded-2xl border-2 border-teal-200 p-4 lg:col-span-2 lab-card">
+          <section class="rounded-2xl border-2 border-teal-200 p-4 lg:col-span-2 lab-card" data-lab-group="economy">
             <h4 class="text-2xl font-black text-teal-700">Quầy bán nhanh trứng</h4>
             <p id="quickSellPrice" class="mt-2 text-lg font-black">Giá hiện tại: 0 xu/trứng</p>
             <p id="quickSellStockText" class="mt-1 text-base text-slate-700">Kho hiện có: 0 trứng</p>
@@ -330,7 +342,7 @@
             <p class="mt-3 text-base text-slate-700">Giá bán tăng khi thời tiết tốt và nâng cấp trứng cao.</p>
           </section>
 
-          <section class="rounded-2xl border-2 border-indigo-200 p-4 lg:col-span-1 lab-card">
+          <section class="rounded-2xl border-2 border-indigo-200 p-4 lg:col-span-1 lab-card" data-lab-group="economy">
             <h4 class="text-2xl font-black text-indigo-700">Máy ủ xu</h4>
             <p id="coinMachineStatus" class="mt-2 text-lg font-black">Máy đang rảnh, có thể bắt đầu mẻ mới.</p>
             <p id="coinMachineProfit" class="mt-1 text-base text-slate-700"></p>
@@ -339,12 +351,12 @@
             </div>
             <div class="mt-4 flex flex-wrap gap-3">
               <button id="startCoinMachineBtn" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-lg">Bắt đầu mẻ ủ</button>
-              <button id="claimCoinMachineBtn" class="px-5 py-3 bg-indigo-800 hover:bg-indigo-900 text-white rounded-xl text-lg">Thu xu</button>
+              <button id="claimCoinMachineBtn" data-action-cta class="px-5 py-3 bg-indigo-800 hover:bg-indigo-900 text-white rounded-xl text-lg">Thu xu</button>
             </div>
             <p class="mt-3 text-base text-slate-700">Đầu tư xu trước, chờ máy xử lý rồi thu về số xu cao hơn.</p>
           </section>
 
-          <section class="rounded-2xl border-2 border-amber-200 p-4 lg:col-span-3 lab-card">
+          <section class="rounded-2xl border-2 border-amber-200 p-4 lg:col-span-3 lab-card" data-lab-group="automation">
             <h4 class="text-2xl font-black text-amber-700">Lò ấp trứng</h4>
             <p id="incubatorStatus" class="mt-2 text-lg font-black">Chưa có trứng nào đang ấp.</p>
             <div class="mt-2 w-full h-3 rounded-full bg-amber-100 overflow-hidden">
@@ -352,7 +364,7 @@
             </div>
             <div class="mt-4 flex flex-wrap gap-3">
               <button id="startIncubatorBtn" class="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-lg">Ủ 1 trứng</button>
-              <button id="claimIncubatorBtn" class="px-5 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-lg">Nhận gà con</button>
+              <button id="claimIncubatorBtn" data-action-cta class="px-5 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-lg">Nhận gà con</button>
             </div>
             <p class="mt-3 text-base text-slate-700">Ủ 1 trứng để nhận 1 gà con và thưởng xu khi nở.</p>
           </section>

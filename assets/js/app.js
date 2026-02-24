@@ -36,6 +36,7 @@ import { getRefs } from './dom.js';
   const state = loadState();
   const statPulseTimers = new WeakMap();
   const statTextCache = new Map();
+  let activeLabFilter = 'all';
 
   function toSafeNumber(value) {
     const n = Number(value);
@@ -1310,6 +1311,77 @@ import { getRefs } from './dom.js';
     refs.nextActionHint.textContent = 'Gợi ý: ưu tiên cho ăn + nhặt trứng để đẩy mood và lượng xu cùng lúc.';
   }
 
+  function renderLabSnapshot(mood) {
+    const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
+
+    if (refs.labSnapMood) {
+      refs.labSnapMood.textContent = `${mood}%`;
+    }
+
+    if (refs.labSnapCoins) {
+      refs.labSnapCoins.textContent = String(state.coins);
+    }
+
+    if (refs.labSnapEggs) {
+      refs.labSnapEggs.textContent = String(state.eggStock);
+    }
+
+    if (refs.labSnapWeather) {
+      refs.labSnapWeather.textContent = weather.label;
+    }
+  }
+
+  function renderReadyActions() {
+    if (!Array.isArray(refs.actionCtaButtons)) {
+      return;
+    }
+
+    refs.actionCtaButtons.forEach((button) => {
+      const isReady = !button.disabled;
+      button.classList.toggle('ready-action', isReady);
+    });
+  }
+
+  function applyLabFilter(rawFilter) {
+    const allowed = new Set(['all', 'economy', 'mission', 'automation']);
+    const filter = allowed.has(rawFilter) ? rawFilter : 'all';
+    activeLabFilter = filter;
+
+    if (Array.isArray(refs.labFilterBtns)) {
+      refs.labFilterBtns.forEach((button) => {
+        const match = button.getAttribute('data-lab-filter') === filter;
+        button.classList.toggle('active', match);
+        button.setAttribute('aria-selected', match ? 'true' : 'false');
+      });
+    }
+
+    if (!Array.isArray(refs.labGroupCards)) {
+      return;
+    }
+
+    refs.labGroupCards.forEach((card) => {
+      const group = card.getAttribute('data-lab-group') || 'all';
+      const show = filter === 'all' || group === filter;
+      card.classList.toggle('lab-card-hidden', !show);
+      card.setAttribute('aria-hidden', show ? 'false' : 'true');
+    });
+  }
+
+  function bindLabFilters() {
+    if (!Array.isArray(refs.labFilterBtns)) {
+      return;
+    }
+
+    refs.labFilterBtns.forEach((button) => {
+      button.addEventListener('click', () => {
+        const filter = button.getAttribute('data-lab-filter') || 'all';
+        applyLabFilter(filter);
+      });
+    });
+
+    applyLabFilter(activeLabFilter);
+  }
+
   function updateUI() {
     const mood = getMood();
     if (mood > state.bestMood) {
@@ -1342,6 +1414,7 @@ import { getRefs } from './dom.js';
       : 'Bấm "Nghe chuyện vui" để xem fact mới.';
     renderMoodMeter(mood);
     renderNextActionHint();
+    renderLabSnapshot(mood);
 
     applyTheme();
     renderAchievements(mood);
@@ -1356,6 +1429,7 @@ import { getRefs } from './dom.js';
     renderPremiumFeed();
     renderAutoFeeder();
     renderIncubator();
+    renderReadyActions();
     renderLogs();
   }
 
@@ -1420,6 +1494,7 @@ import { getRefs } from './dom.js';
   }
 
   bindChickenSvgButtons();
+  bindLabFilters();
   bindLabShortcutButtons();
 
   refs.saveNameBtn.addEventListener('click', () => {
