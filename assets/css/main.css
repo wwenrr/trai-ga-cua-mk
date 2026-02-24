@@ -1,0 +1,149 @@
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@700&display=swap');
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Comic Neue', cursive;
+  transition: background 0.45s ease;
+}
+
+body.night-mode {
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 45%, #334155 100%);
+}
+
+.cloud { animation: drift 25s linear infinite; }
+.chicken { transition: transform 0.3s; }
+.chicken:hover { transform: scale(1.2) rotate(5deg); }
+.sun-rays { transform-origin: 720px 120px; animation: shine 8s linear infinite; }
+
+.nav-link.active {
+  color: #b45309;
+  font-weight: 900;
+}
+
+body.night-mode .nav-link.active {
+  color: #facc15;
+}
+
+.stat-card { animation: pop-in 0.45s ease-out both; }
+
+#toTop {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#toTop.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+#skyOverlay {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+body.night-mode #skyOverlay {
+  opacity: 1;
+}
+
+body.night-mode #stars {
+  opacity: 1;
+}
+
+#stars {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translate(-50%, 20px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 60;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#eggField {
+  background: linear-gradient(180deg, #d9f99d 0%, #bef264 100%);
+  border: 3px dashed #65a30d;
+  border-radius: 1rem;
+  min-height: 180px;
+  position: relative;
+  overflow: hidden;
+}
+
+.egg-drop {
+  position: absolute;
+  top: -32px;
+  font-size: 2rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+  animation: egg-fall 5.6s linear forwards;
+  transition: transform 0.15s ease;
+  z-index: 5;
+}
+
+.egg-drop:hover {
+  transform: scale(1.15);
+}
+
+.achievement-badge {
+  border: 2px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.achievement-badge.unlocked {
+  border-color: #f59e0b;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.quest-bar {
+  transition: width 0.25s ease;
+}
+
+.log-item {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+@keyframes drift {
+  0% { transform: translateX(-60px); }
+  50% { transform: translateX(30px); }
+  100% { transform: translateX(-60px); }
+}
+
+@keyframes shine {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pop-in {
+  0% { transform: translateY(10px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes egg-fall {
+  0% { transform: translateY(-30px) rotate(0deg); }
+  100% { transform: translateY(220px) rotate(250deg); }
+}
+
+@media (max-width: 767px) {
+  .egg-drop {
+    font-size: 1.7rem;
+  }
+}
