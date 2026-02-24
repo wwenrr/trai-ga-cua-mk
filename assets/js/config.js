@@ -15,6 +15,16 @@ export const AUTO_SELL_MIN_THRESHOLD = 8;
 export const AUTO_SELL_MAX_THRESHOLD = 60;
 export const AUTO_SELL_DEFAULT_THRESHOLD = 18;
 export const AUTO_SELL_BATCH_SIZE = 3;
+export const SANITATION_DECAY_INTERVAL_MS = 18000;
+export const SANITATION_DECAY_STEP = 1;
+export const SANITATION_MANUAL_CLEAN_COST = 3;
+export const SANITATION_CLEAN_GAIN = 16;
+export const SANITATION_BOT_COST = 95;
+export const SANITATION_BOT_INTERVAL_MS = 26000;
+export const SANITATION_LOW_THRESHOLD = 38;
+export const SANITATION_DANGER_THRESHOLD = 20;
+export const SANITATION_MOOD_PENALTY_MAX = 16;
+export const SANITATION_EGG_INTERVAL_PENALTY_MS = 1100;
 export const EGG_RUSH_COST = 42;
 export const EGG_RUSH_DURATION_MS = 30000;
 export const EGG_RUSH_INTERVAL_FACTOR = 0.58;
@@ -198,6 +208,15 @@ export const DEFAULT_STATE = {
     threshold: AUTO_SELL_DEFAULT_THRESHOLD,
     totalEggsSold: 0,
     totalCoinsEarned: 0
+  },
+  sanitation: {
+    cleanliness: 100,
+    totalManualCleans: 0,
+    totalAutoCleans: 0,
+    lastDecayAt: 0,
+    botPurchased: false,
+    botEnabled: false,
+    lastBotCleanAt: 0
   },
   autoEggEnabled: true,
   eggRush: {

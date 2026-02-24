@@ -16,6 +16,16 @@ import {
   AUTO_SELL_MAX_THRESHOLD,
   AUTO_SELL_DEFAULT_THRESHOLD,
   AUTO_SELL_BATCH_SIZE,
+  SANITATION_DECAY_INTERVAL_MS,
+  SANITATION_DECAY_STEP,
+  SANITATION_MANUAL_CLEAN_COST,
+  SANITATION_CLEAN_GAIN,
+  SANITATION_BOT_COST,
+  SANITATION_BOT_INTERVAL_MS,
+  SANITATION_LOW_THRESHOLD,
+  SANITATION_DANGER_THRESHOLD,
+  SANITATION_MOOD_PENALTY_MAX,
+  SANITATION_EGG_INTERVAL_PENALTY_MS,
   EGG_RUSH_COST,
   EGG_RUSH_DURATION_MS,
   EGG_RUSH_INTERVAL_FACTOR,
@@ -198,6 +208,33 @@ import { getRefs } from './dom.js';
       threshold,
       totalEggsSold: toSafeNumber(rawSeller.totalEggsSold),
       totalCoinsEarned: toSafeNumber(rawSeller.totalCoinsEarned)
+    };
+  }
+
+  function normalizeSanitation(rawSanitation) {
+    if (!rawSanitation || typeof rawSanitation !== 'object') {
+      return {
+        cleanliness: 100,
+        totalManualCleans: 0,
+        totalAutoCleans: 0,
+        lastDecayAt: 0,
+        botPurchased: false,
+        botEnabled: false,
+        lastBotCleanAt: 0
+      };
+    }
+
+    const cleanliness = clamp(toSafeNumber(rawSanitation.cleanliness), 0, 100);
+    const botPurchased = Boolean(rawSanitation.botPurchased);
+    const botEnabled = botPurchased && Boolean(rawSanitation.botEnabled);
+    return {
+      cleanliness,
+      totalManualCleans: toSafeNumber(rawSanitation.totalManualCleans),
+      totalAutoCleans: toSafeNumber(rawSanitation.totalAutoCleans),
+      lastDecayAt: toSafeNumber(rawSanitation.lastDecayAt),
+      botPurchased,
+      botEnabled,
+      lastBotCleanAt: botEnabled ? toSafeNumber(rawSanitation.lastBotCleanAt) : 0
     };
   }
 
@@ -606,6 +643,7 @@ import { getRefs } from './dom.js';
       },
       autoFeeder: normalizeAutoFeeder(input.autoFeeder),
       autoSeller: normalizeAutoSeller(input.autoSeller),
+      sanitation: normalizeSanitation(input.sanitation),
       autoEggEnabled: typeof input.autoEggEnabled === 'boolean' ? input.autoEggEnabled : true,
       eggRush: normalizeEggRush(input.eggRush),
       decorations: normalizeDecorations(input.decorations),
@@ -785,14 +823,33 @@ import { getRefs } from './dom.js';
     return isWeatherShieldActive() ? WEATHER_SHIELD_COIN_BONUS : 0;
   }
 
+  function getCleanliness() {
+    if (!state.sanitation) {
+      return 100;
+    }
+    return clamp(toSafeNumber(state.sanitation.cleanliness), 0, 100);
+  }
+
+  function getSanitationMoodPenalty() {
+    const dirtiness = 100 - getCleanliness();
+    return Math.round((dirtiness / 100) * SANITATION_MOOD_PENALTY_MAX);
+  }
+
+  function getSanitationEggIntervalPenalty() {
+    const dirtiness = 100 - getCleanliness();
+    return Math.round((dirtiness / 100) * SANITATION_EGG_INTERVAL_PENALTY_MS);
+  }
+
   function getMood() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const base = state.cluckCount * 3
       + state.feedCount * (6 + state.upgrades.feedLevel)
       + state.eggCount * 5
       + state.hatchCount * 8;
-    const decorated = Math.round(base * getEffectiveWeatherMoodFactor(weather)) + getDecorationMoodBonus();
-    return Math.min(100, decorated);
+    const decorated = Math.round(base * getEffectiveWeatherMoodFactor(weather))
+      + getDecorationMoodBonus()
+      - getSanitationMoodPenalty();
+    return clamp(decorated, 0, 100);
   }
 
   function getFeedPower() {
@@ -1043,7 +1100,8 @@ import { getRefs } from './dom.js';
   function getAutoEggInterval() {
     const weather = WEATHER_CONFIG[state.weather] || WEATHER_CONFIG.sunny;
     const reduced = getEffectiveWeatherEggInterval(weather) - state.upgrades.eggLevel * 140;
-    let baseInterval = Math.max(1700, reduced);
+    const sanitationPenalty = getSanitationEggIntervalPenalty();
+    let baseInterval = Math.max(1700, reduced + sanitationPenalty);
     baseInterval = Math.max(1300, Math.round(baseInterval * getWindmillIntervalFactor()));
     if (isEggRushRunning()) {
       return Math.max(900, Math.round(baseInterval * EGG_RUSH_INTERVAL_FACTOR));
@@ -2336,6 +2394,120 @@ import { getRefs } from './dom.js';
     updateUI();
   }
 
+  function renderSanitationPanel() {
+    if (!refs.sanitationStatus || !refs.sanitationHint || !refs.sanitationMeta || !refs.sanitationProgressBar || !refs.cleanNowBtn || !refs.sanitationBotBtn) {
+      return;
+    }
+
+    const cleanliness = getCleanliness();
+    if (state.sanitation.cleanliness !== cleanliness) {
+      state.sanitation.cleanliness = cleanliness;
+    }
+
+    const moodPenalty = getSanitationMoodPenalty();
+    const intervalPenalty = getSanitationEggIntervalPenalty();
+
+    refs.sanitationProgressBar.style.width = `${cleanliness}%`;
+    refs.sanitationMeta.textContent = `Đã dọn tay ${state.sanitation.totalManualCleans} lần • robot ${state.sanitation.totalAutoCleans} lần.`;
+
+    refs.sanitationStatus.classList.remove('urgent-timer');
+    if (cleanliness <= SANITATION_DANGER_THRESHOLD) {
+      refs.sanitationStatus.textContent = `Chuồng đang rất bẩn (${cleanliness}%). Hiệu suất đang giảm mạnh.`;
+      refs.sanitationHint.textContent = `Phạt mood -${moodPenalty}% • tăng chu kỳ trứng +${intervalPenalty}ms. Ưu tiên dọn ngay.`;
+      refs.sanitationStatus.classList.add('urgent-timer');
+    } else if (cleanliness <= SANITATION_LOW_THRESHOLD) {
+      refs.sanitationStatus.textContent = `Chuồng hơi bẩn (${cleanliness}%), nên vệ sinh sớm để giữ nhịp farm.`;
+      refs.sanitationHint.textContent = `Phạt mood -${moodPenalty}% • chu kỳ trứng chậm hơn +${intervalPenalty}ms.`;
+    } else {
+      refs.sanitationStatus.textContent = `Chuồng sạch ${cleanliness}%, đàn gà đang ổn định.`;
+      refs.sanitationHint.textContent = moodPenalty > 0
+        ? `Độ bẩn nhẹ đang phạt mood -${moodPenalty}% • chậm +${intervalPenalty}ms mỗi chu kỳ trứng.`
+        : 'Hiệu suất sạch tối đa: không phạt mood, tốc độ trứng giữ ổn định.';
+    }
+
+    const canManualClean = cleanliness < 100 && state.coins >= SANITATION_MANUAL_CLEAN_COST;
+    refs.cleanNowBtn.disabled = !canManualClean;
+    refs.cleanNowBtn.classList.toggle('opacity-60', !canManualClean);
+    refs.cleanNowBtn.classList.toggle('cursor-not-allowed', !canManualClean);
+    if (cleanliness >= 100) {
+      refs.cleanNowBtn.textContent = 'Chuồng đã sạch 100%';
+    } else {
+      refs.cleanNowBtn.textContent = `Dọn ngay (-${SANITATION_MANUAL_CLEAN_COST} xu, +${SANITATION_CLEAN_GAIN}%)`;
+    }
+
+    if (!state.sanitation.botPurchased) {
+      const canBuyBot = state.coins >= SANITATION_BOT_COST;
+      refs.sanitationBotBtn.disabled = !canBuyBot;
+      refs.sanitationBotBtn.classList.toggle('opacity-60', !canBuyBot);
+      refs.sanitationBotBtn.classList.toggle('cursor-not-allowed', !canBuyBot);
+      refs.sanitationBotBtn.textContent = `Mua robot vệ sinh (${SANITATION_BOT_COST} xu)`;
+      return;
+    }
+
+    refs.sanitationBotBtn.disabled = false;
+    refs.sanitationBotBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+    refs.sanitationBotBtn.textContent = state.sanitation.botEnabled ? 'Robot vệ sinh: Bật' : 'Robot vệ sinh: Tắt';
+  }
+
+  function runSanitationTick() {
+    if (!state.sanitation) {
+      return;
+    }
+
+    const now = Date.now();
+    let saveNeeded = false;
+    let uiNeedsRefresh = false;
+
+    if (state.sanitation.lastDecayAt <= 0) {
+      state.sanitation.lastDecayAt = now;
+      saveNeeded = true;
+    }
+
+    const elapsedSinceDecay = now - state.sanitation.lastDecayAt;
+    if (elapsedSinceDecay >= SANITATION_DECAY_INTERVAL_MS) {
+      const steps = Math.floor(elapsedSinceDecay / SANITATION_DECAY_INTERVAL_MS);
+      if (steps > 0) {
+        const before = state.sanitation.cleanliness;
+        state.sanitation.cleanliness = clamp(before - steps * SANITATION_DECAY_STEP, 0, 100);
+        state.sanitation.lastDecayAt += steps * SANITATION_DECAY_INTERVAL_MS;
+        saveNeeded = true;
+        if (state.sanitation.cleanliness !== before) {
+          uiNeedsRefresh = true;
+        }
+      }
+    }
+
+    if (state.sanitation.botPurchased && state.sanitation.botEnabled) {
+      if (state.sanitation.lastBotCleanAt <= 0) {
+        state.sanitation.lastBotCleanAt = now;
+        saveNeeded = true;
+      } else if (now - state.sanitation.lastBotCleanAt >= SANITATION_BOT_INTERVAL_MS) {
+        const before = state.sanitation.cleanliness;
+        if (before < 100) {
+          state.sanitation.cleanliness = clamp(before + SANITATION_CLEAN_GAIN, 0, 100);
+          if (state.sanitation.cleanliness !== before) {
+            state.sanitation.totalAutoCleans += 1;
+            uiNeedsRefresh = true;
+          }
+        }
+        state.sanitation.lastBotCleanAt = now;
+        saveNeeded = true;
+      }
+    }
+
+    if (!saveNeeded) {
+      return;
+    }
+
+    saveState();
+    if (!uiNeedsRefresh) {
+      return;
+    }
+
+    restartAutoEggTimer();
+    updateUI();
+  }
+
   function getQuickOpsActions() {
     const actions = [];
     const today = getTodayKey();
@@ -2401,6 +2573,15 @@ import { getRefs } from './dom.js';
         id: 'quick_market_order',
         label: `Giao đơn thương lái (${order.target} trứng, +${order.reward} xu)`,
         triggerRef: refs.claimOrderBtn
+      });
+    }
+
+    const cleanliness = getCleanliness();
+    if (cleanliness <= SANITATION_LOW_THRESHOLD && state.coins >= SANITATION_MANUAL_CLEAN_COST && refs.cleanNowBtn) {
+      actions.push({
+        id: 'quick_cleaning',
+        label: `Dọn chuồng nhanh (${cleanliness}% sạch, -${SANITATION_MANUAL_CLEAN_COST} xu)`,
+        triggerRef: refs.cleanNowBtn
       });
     }
 
@@ -3167,6 +3348,16 @@ import { getRefs } from './dom.js';
       return;
     }
 
+    const cleanliness = getCleanliness();
+    if (cleanliness <= SANITATION_DANGER_THRESHOLD) {
+      refs.nextActionHint.textContent = `Gợi ý: độ sạch chỉ còn ${cleanliness}%, dọn chuồng ngay (phím O) để tránh tụt hiệu suất.`;
+      return;
+    }
+    if (cleanliness <= SANITATION_LOW_THRESHOLD && state.coins >= SANITATION_MANUAL_CLEAN_COST) {
+      refs.nextActionHint.textContent = `Gợi ý: chuồng đang ${cleanliness}% sạch, dọn sớm để giữ tốc độ farm ổn định.`;
+      return;
+    }
+
     const autoSellThreshold = getAutoSellThreshold();
     if (!state.autoSeller.enabled && state.eggStock >= autoSellThreshold + 2) {
       refs.nextActionHint.textContent = `Gợi ý: kho cao hơn ${autoSellThreshold} trứng, bật Auto bán để giữ dòng tiền ổn định.`;
@@ -3456,6 +3647,25 @@ import { getRefs } from './dom.js';
       });
     }
 
+    const cleanliness = getCleanliness();
+    if (cleanliness <= SANITATION_DANGER_THRESHOLD) {
+      actions.push({
+        id: 'priority_sanitation_urgent',
+        title: 'Chuồng đang rất bẩn',
+        desc: `Độ sạch còn ${cleanliness}%, nên dọn ngay để tránh giảm tốc độ farm.`,
+        cta: 'Dọn ngay',
+        triggerRef: refs.cleanNowBtn
+      });
+    } else if (cleanliness <= SANITATION_LOW_THRESHOLD && state.coins >= SANITATION_MANUAL_CLEAN_COST) {
+      actions.push({
+        id: 'priority_sanitation_warn',
+        title: 'Độ sạch chuồng đang giảm',
+        desc: `Còn ${cleanliness}% sạch. Dọn sớm để giữ mood và nhịp rơi trứng.`,
+        cta: 'Dọn chuồng',
+        triggerRef: refs.cleanNowBtn
+      });
+    }
+
     const autoSellThreshold = getAutoSellThreshold();
     if (!state.autoSeller.enabled && state.eggStock >= autoSellThreshold + 2) {
       actions.push({
@@ -3671,6 +3881,7 @@ import { getRefs } from './dom.js';
     renderPremiumFeed();
     renderAutoFeeder();
     renderAutoSellerPanel();
+    renderSanitationPanel();
     renderQuickOpsPanel();
     renderIncubator();
     renderPriorityBoard();
@@ -4467,6 +4678,61 @@ import { getRefs } from './dom.js';
     });
   }
 
+  if (refs.cleanNowBtn) {
+    refs.cleanNowBtn.addEventListener('click', () => {
+      const cleanliness = getCleanliness();
+      if (cleanliness >= 100) {
+        showToast('Chuồng đã sạch tối đa rồi');
+        return;
+      }
+
+      if (!spendCoins(SANITATION_MANUAL_CLEAN_COST)) {
+        showToast('Không đủ xu để dọn chuồng');
+        return;
+      }
+
+      const gain = Math.min(SANITATION_CLEAN_GAIN, 100 - cleanliness);
+      state.sanitation.cleanliness = clamp(cleanliness + gain, 0, 100);
+      state.sanitation.totalManualCleans += 1;
+      state.sanitation.lastDecayAt = Date.now();
+      saveState();
+      restartAutoEggTimer();
+      updateUI();
+      addLog(`Dọn chuồng thủ công (+${gain}% sạch, -${SANITATION_MANUAL_CLEAN_COST} xu).`);
+      showToast(`Chuồng sạch hơn +${gain}%`);
+    });
+  }
+
+  if (refs.sanitationBotBtn) {
+    refs.sanitationBotBtn.addEventListener('click', () => {
+      if (!state.sanitation.botPurchased) {
+        if (!spendCoins(SANITATION_BOT_COST)) {
+          showToast('Không đủ xu để mua robot vệ sinh');
+          return;
+        }
+
+        state.sanitation.botPurchased = true;
+        state.sanitation.botEnabled = true;
+        state.sanitation.lastBotCleanAt = Date.now();
+        saveState();
+        updateUI();
+        addLog(`Mua robot vệ sinh (-${SANITATION_BOT_COST} xu).`);
+        showToast('Robot vệ sinh đã kích hoạt');
+        return;
+      }
+
+      state.sanitation.botEnabled = !state.sanitation.botEnabled;
+      if (state.sanitation.botEnabled && state.sanitation.lastBotCleanAt <= 0) {
+        state.sanitation.lastBotCleanAt = Date.now();
+      }
+
+      saveState();
+      updateUI();
+      addLog(state.sanitation.botEnabled ? 'Đã bật robot vệ sinh.' : 'Đã tắt robot vệ sinh.');
+      showToast(state.sanitation.botEnabled ? 'Robot vệ sinh: Bật' : 'Robot vệ sinh: Tắt');
+    });
+  }
+
   if (refs.runQuickOpsBtn) {
     refs.runQuickOpsBtn.addEventListener('click', () => {
       runQuickOpsBatch();
@@ -4533,6 +4799,15 @@ import { getRefs } from './dom.js';
         threshold: state.autoSeller.threshold,
         totalEggsSold: 0,
         totalCoinsEarned: 0
+      },
+      sanitation: {
+        cleanliness: 100,
+        totalManualCleans: 0,
+        totalAutoCleans: 0,
+        lastDecayAt: 0,
+        botPurchased: state.sanitation.botPurchased,
+        botEnabled: state.sanitation.botEnabled,
+        lastBotCleanAt: 0
       },
       streak: state.streak,
       lastVisitDate: state.lastVisitDate,
@@ -4614,6 +4889,10 @@ import { getRefs } from './dom.js';
       refs.mobileTraderActionBtn.click();
     } else if (key === 's') {
       refs.toggleAutoSellBtn.click();
+    } else if (key === 'o') {
+      if (refs.cleanNowBtn) {
+        refs.cleanNowBtn.click();
+      }
     } else if (key === 'c') {
       if (refs.runQuickOpsBtn) {
         refs.runQuickOpsBtn.click();
@@ -4722,6 +5001,7 @@ import { getRefs } from './dom.js';
     renderCoinMachine();
     renderWholesalePanel();
     runAutoSellerTick();
+    runSanitationTick();
     runEggRushTick();
     runFlashOrderTick();
     runVipVisitTick();
@@ -4742,6 +5022,7 @@ import { getRefs } from './dom.js';
 
   runWeatherShieldTick();
   runAutoSellerTick();
+  runSanitationTick();
   runFlashOrderTick();
   runVipVisitTick();
   runMobileTraderTick();
